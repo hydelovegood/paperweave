@@ -170,7 +170,7 @@ paperlab/
 ```bash
 conda create -n paperweave python=3.10
 conda activate paperweave
-git clone <your-repo-url>
+git clone https://github.com/hydelovegood/paperweave
 cd paperlab
 pip install -e .
 ```

@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff5f5"/>
+      <stop offset="100%" stop-color="#fce7f3"/>
+    </linearGradient>
+    <linearGradient id="h1g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fdba74"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="h2g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="h3g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fdba74"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="v1g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f9a8d4"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="v2g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#00000018"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+
+  <!--
+    3x3 basket weave, 240x240 square, offset (70,200)
+    Strip width: 26, gap: ~40
+    Positions: S1=40..66, S2=106..132, S3=172..198
+    H strips: x=70..310, V strips: y=200..440
+  -->
+  <g filter="url(#shadow)">
+    <!-- H1: y=240..266 -->
+    <rect x="70" y="240" width="240" height="26" rx="5" fill="url(#h1g)"/>
+
+    <!-- V1 piece 1: y=200..306 (covers H1 -> V on top) -->
+    <path d="M115 200 H131 Q136 200 136 205 V306 H110 V205 Q110 200 115 200 Z" fill="url(#v1g)"/>
+
+    <!-- H2: y=306..332 -->
+    <rect x="70" y="306" width="240" height="26" rx="5" fill="url(#h2g)"/>
+
+    <!-- V1 piece 2: y=332..440 (covers H3 -> V on top) -->
+    <path d="M110 332 H136 V435 Q136 440 131 440 H115 Q110 440 110 435 Z" fill="url(#v1g)"/>
+
+    <!-- H3: y=372..398 -->
+    <rect x="70" y="372" width="240" height="26" rx="5" fill="url(#h3g)"/>
+
+    <!-- V2 piece 1: y=200..240 (gap at H1: 240..266) -->
+    <path d="M181 200 H197 Q202 200 202 205 V240 H176 V205 Q176 200 181 200 Z" fill="url(#v2g)"/>
+    <!-- V2 piece 2: y=266..372 (gap at H3: 372..398) -->
+    <rect x="176" y="266" width="26" height="106" fill="url(#v2g)"/>
+    <!-- V2 piece 3: y=398..440 -->
+    <path d="M176 398 H202 V435 Q202 440 197 440 H181 Q176 440 176 435 Z" fill="url(#v2g)"/>
+
+    <!-- V3 piece 1: y=200..306 (covers H1 -> V on top) -->
+    <path d="M247 200 H263 Q268 200 268 205 V306 H242 V205 Q242 200 247 200 Z" fill="url(#v1g)"/>
+    <!-- V3 piece 2: y=332..440 (covers H3 -> V on top) -->
+    <path d="M242 332 H268 V435 Q268 440 263 440 H247 Q242 440 242 435 Z" fill="url(#v1g)"/>
+  </g>
+
+  <!-- Project name -->
+  <text x="380" y="275" font-family="'Trajan Pro', 'Trajan', serif" font-size="72" font-weight="700" fill="#1c1917">PaperWeave</text>
+
+  <!-- Chinese name -->
+  <text x="380" y="348" font-family="FangSong, STFangsong, serif" font-size="38" font-weight="400" fill="#c2410c">溯源文库</text>
+
+  <!-- Tagline -->
+  <text x="380" y="415" font-family="'Trajan Pro', 'Trajan', serif" font-size="18" font-weight="400" fill="#78716c">Local-first paper library CLI for structured summaries, deep Q&amp;A, and citation tracking</text>
+</svg>
