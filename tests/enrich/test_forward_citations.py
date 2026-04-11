@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from paperlab.enrich.forward_citations import (
     _get_paper,
+    _resolve,
     select_papers_for_citations,
     track_forward_citations,
 )
@@ -146,6 +147,26 @@ def test_track_forward_citations_persists_edges_and_links(monkeypatch):
             lambda *a, **kw: _sample_citations(),
         )
         monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_arxiv",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_title",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_title",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
             "paperlab.enrich.forward_citations.unpaywall.check_oa",
             lambda doi, email: None,
         )
@@ -217,6 +238,26 @@ def test_track_forward_citations_normalizes_doi_landing_urls(monkeypatch):
             ],
         )
         monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_arxiv",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_title",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_title",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
             "paperlab.enrich.forward_citations.unpaywall.check_oa",
             lambda doi, email: None,
         )
@@ -281,6 +322,26 @@ def test_track_citations_stores_non_oa_links_when_configured(monkeypatch):
         monkeypatch.setattr(
             "paperlab.enrich.forward_citations.openalex.get_forward_citations",
             lambda *a, **kw: _sample_citations(),
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_arxiv",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.resolve_by_title",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_doi",
+            lambda *a, **kw: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.crossref.resolve_by_title",
+            lambda *a, **kw: None,
         )
         monkeypatch.setattr(
             "paperlab.enrich.forward_citations.unpaywall.check_oa",
@@ -411,7 +472,7 @@ def test_track_forward_citations_records_failed_task_run(monkeypatch):
 
         paper_id = _insert_classic_paper(db_path, doi="10.1234/classic")
         monkeypatch.setattr(
-            "paperlab.enrich.forward_citations.openalex.resolve_by_doi",
+            "paperlab.enrich.forward_citations._fetch_citations",
             lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("api boom")),
         )
 
@@ -430,5 +491,80 @@ def test_track_forward_citations_records_failed_task_run(monkeypatch):
 
         assert row[0] == "failed"
         assert task[0] == "failed"
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_resolve_accumulates_ids_from_multiple_sources(monkeypatch):
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.openalex.resolve_by_doi",
+        lambda doi, mailto="": {"openalex_id": "W1", "doi": "10.1/test"},
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.openalex.resolve_by_title",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.s2.resolve_by_doi",
+        lambda doi, api_key="": {"s2_id": "S2-1"},
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.s2.resolve_by_arxiv",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.s2.resolve_by_title",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.crossref.resolve_by_doi",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "paperlab.enrich.forward_citations.crossref.resolve_by_title",
+        lambda *args, **kwargs: None,
+    )
+
+    result = _resolve({"title": "T", "doi": "10.1/test", "arxiv_id": None}, "mail@example.com", "s2-key")
+
+    assert result["openalex_id"] == "W1"
+    assert result["s2_id"] == "S2-1"
+
+
+def test_track_forward_citations_falls_back_to_s2_when_openalex_fetch_fails(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        now = "2026-04-10T00:00:00+00:00"
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                "INSERT INTO papers (paper_uid, canonical_title, openalex_id, s2_paper_id, parse_status, enrich_status, summary_status, qa_status, graph_status, citation_status, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 'done', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)",
+                (f"paper-{uuid4()}", "Fallback Seed", "W-openalex", "S2-seed", now, now),
+            )
+            paper_id = cursor.lastrowid
+            conn.commit()
+
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations._resolve",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.openalex.get_forward_citations",
+            lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("openalex down")),
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.s2.get_forward_citations",
+            lambda *args, **kwargs: [{"title": "S2 Citing", "doi": "10.1/s2", "year": 2024, "is_oa": False, "oa_url": None}],
+        )
+
+        citing_ids = track_forward_citations(project_root, paper_id)
+
+        assert len(citing_ids) == 1
     finally:
         shutil.rmtree(project_root, ignore_errors=True)

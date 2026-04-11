@@ -320,3 +320,35 @@ def test_export_does_not_modify_db():
         assert before_sums == after_sums
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_export_qa_uses_single_connection(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    connect_calls = {"count": 0}
+    real_connect = sqlite3.connect
+
+    def counting_connect(*args, **kwargs):
+        connect_calls["count"] += 1
+        return real_connect(*args, **kwargs)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        _insert_paper_with_qa(db_path, "Test Paper A", [
+            {"type": "reviewer", "question": "Q1", "answer": "A1"},
+        ])
+        _insert_paper_with_qa(db_path, "Test Paper B", [
+            {"type": "reviewer", "question": "Q2", "answer": "A2"},
+        ])
+
+        monkeypatch.setattr("paperlab.export.qa_export.sqlite3.connect", counting_connect)
+        output_path = project_root / "data" / "exports" / "QA.md"
+        export_qa(db_path, output_path)
+
+        assert connect_calls["count"] == 1
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)

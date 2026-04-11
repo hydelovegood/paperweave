@@ -69,3 +69,19 @@ def test_doctor_reports_core_checks(monkeypatch):
         assert report["llm_check"] is None
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_dependency_status_only_treats_import_error_as_missing(monkeypatch):
+    from paperlab.cli.doctor_cmd import _dependency_status
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "deepxiv_sdk":
+            raise ImportError("missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+    result = _dependency_status()
+    assert result["deepxiv_sdk"] is False

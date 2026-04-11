@@ -6,6 +6,9 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
+from openai import APIConnectionError, APIError, APITimeoutError
+
 from paperlab.config import load_settings
 from paperlab.llm.qa import generate_qa, select_papers_for_qa
 
@@ -43,7 +46,7 @@ def qa_path(
             generate_qa(root, pid)
             completed.append(pid)
             print(f"Generated QA for paper {pid}")
-        except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        except (FileNotFoundError, ValueError, json.JSONDecodeError, APIError, APIConnectionError, APITimeoutError, requests.RequestException) as exc:
             print(f"Failed to generate QA for paper {pid}: {exc}")
     return completed
 

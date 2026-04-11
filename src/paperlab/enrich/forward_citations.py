@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+import requests
+
 from paperlab.config import load_settings
 from paperlab.enrich import crossref_client as crossref
 from paperlab.enrich import openalex_client as openalex
@@ -125,48 +127,41 @@ def _resolve(paper: dict, email: str, s2_key: str) -> dict | None:
 
     # OpenAlex: try DOI, then title
     if paper.get("doi"):
-        oa = openalex.resolve_by_doi(paper["doi"], mailto=email)
+        oa = _safe_resolve(lambda: openalex.resolve_by_doi(paper["doi"], mailto=email))
         if oa:
             result.update(oa)
-            return result
 
     if paper.get("title") and not result.get("openalex_id"):
-        oa = openalex.resolve_by_title(paper["title"], mailto=email)
+        oa = _safe_resolve(lambda: openalex.resolve_by_title(paper["title"], mailto=email))
         if oa:
             result.update(oa)
-            return result
 
     # Semantic Scholar: try arXiv, DOI, then title
-    if paper.get("arxiv_id"):
-        s2r = s2.resolve_by_arxiv(paper["arxiv_id"], api_key=s2_key)
+    if paper.get("arxiv_id") and not result.get("s2_id"):
+        s2r = _safe_resolve(lambda: s2.resolve_by_arxiv(paper["arxiv_id"], api_key=s2_key))
         if s2r:
             result.update(s2r)
-            return result
 
-    if paper.get("doi"):
-        s2r = s2.resolve_by_doi(paper["doi"], api_key=s2_key)
+    if paper.get("doi") and not result.get("s2_id"):
+        s2r = _safe_resolve(lambda: s2.resolve_by_doi(paper["doi"], api_key=s2_key))
         if s2r:
             result.update(s2r)
-            return result
 
-    if paper.get("title"):
-        s2r = s2.resolve_by_title(paper["title"], api_key=s2_key)
+    if paper.get("title") and not result.get("s2_id"):
+        s2r = _safe_resolve(lambda: s2.resolve_by_title(paper["title"], api_key=s2_key))
         if s2r:
             result.update(s2r)
-            return result
 
     # Crossref: try DOI, then title
-    if paper.get("doi"):
-        cr = crossref.resolve_by_doi(paper["doi"], mailto=email)
+    if paper.get("doi") and not result.get("doi"):
+        cr = _safe_resolve(lambda: crossref.resolve_by_doi(paper["doi"], mailto=email))
         if cr:
             result.update(cr)
-            return result
 
-    if paper.get("title"):
-        cr = crossref.resolve_by_title(paper["title"], mailto=email)
+    if paper.get("title") and not result.get("doi"):
+        cr = _safe_resolve(lambda: crossref.resolve_by_title(paper["title"], mailto=email))
         if cr:
             result.update(cr)
-            return result
 
     return result or None
 
@@ -180,12 +175,15 @@ def _fetch_citations(
     s2_key: str,
 ) -> list[dict]:
     if paper.get("openalex_id"):
-        citations = openalex.get_forward_citations(
-            paper["openalex_id"], year_start, year_end, max_results, mailto=email,
-        )
-        for c in citations:
-            c["_source"] = "openalex"
-        return citations
+        try:
+            citations = openalex.get_forward_citations(
+                paper["openalex_id"], year_start, year_end, max_results, mailto=email,
+            )
+            for c in citations:
+                c["_source"] = "openalex"
+            return citations
+        except Exception:
+            pass
 
     s2_identifier = paper.get("s2_id") or paper.get("s2_paper_id")
     if s2_identifier:
@@ -279,11 +277,10 @@ def _create_external_link(db_path: Path, paper_id: int, citing: dict, settings) 
     doi = _normalize_doi(citing.get("doi"))
 
     if settings.citations.download_oa_only and not is_oa and doi and settings.secrets.unpaywall_email:
-        if doi:
-            ua_result = unpaywall.check_oa(doi, settings.secrets.unpaywall_email)
-            if ua_result and ua_result["is_oa"]:
-                is_oa = True
-                oa_url = oa_url or ua_result["oa_url"]
+        ua_result = unpaywall.check_oa(doi, settings.secrets.unpaywall_email)
+        if ua_result and ua_result["is_oa"]:
+            is_oa = True
+            oa_url = oa_url or ua_result["oa_url"]
 
     url = oa_url if is_oa and oa_url else (f"https://doi.org/{doi}" if doi else oa_url)
     if not url:
@@ -312,3 +309,10 @@ def _normalize_doi(doi: str | None) -> str | None:
             lowered = normalized.lower()
             break
     return normalized
+
+
+def _safe_resolve(fn):
+    try:
+        return fn()
+    except (requests.RequestException, RuntimeError):
+        return None

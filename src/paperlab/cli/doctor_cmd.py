@@ -45,7 +45,7 @@ def _dependency_status() -> dict[str, bool]:
         try:
             __import__(module_name)
             results[module_name] = True
-        except Exception:
+        except ImportError:
             results[module_name] = False
     return results
 

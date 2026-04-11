@@ -229,6 +229,9 @@ export:
   qa_file: data/exports/QA.md
 ```
 
+Note: `download_oa_only: true` does **not** mean non-OA citing papers are discarded.  
+PaperWeave still stores landing-page / DOI links for non-OA papers; the flag mainly controls whether it actively probes for OA availability.
+
 ---
 
 ## Quick Start

@@ -23,9 +23,10 @@ citations:
   default_year_start: 2024
   default_year_end: 2026
   default_max_results: 30
+  # When true, PaperWeave still stores non-OA landing pages.
+  # The flag mainly controls whether Unpaywall is used to probe for OA links.
   download_oa_only: true
 
 export:
   summary_file: data/exports/summary.md
   qa_file: data/exports/QA.md
-

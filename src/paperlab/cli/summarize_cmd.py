@@ -6,6 +6,9 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
+from openai import APIConnectionError, APIError, APITimeoutError
+
 from paperlab.config import load_settings
 from paperlab.llm.summary import select_papers_for_summary, summarize_paper
 
@@ -43,7 +46,7 @@ def summarize_path(
             summarize_paper(root, pid)
             completed.append(pid)
             print(f"Summarized paper {pid}")
-        except Exception as exc:
+        except (FileNotFoundError, ValueError, json.JSONDecodeError, APIError, APIConnectionError, APITimeoutError, requests.RequestException) as exc:
             print(f"Failed to summarize paper {pid}: {exc}")
     return completed
 
