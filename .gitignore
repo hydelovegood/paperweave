@@ -6,3 +6,4 @@ tests/**/.tmp/
 data/
 db/
 *.egg-info/
+BUGFIX.md
