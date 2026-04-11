@@ -206,6 +206,10 @@ def test_parse_and_persist_writes_sections_and_parsed_json(monkeypatch) -> None:
                 arxiv_id="2501.12345",
             ),
         )
+        monkeypatch.setattr(
+            "paperlab.parsing.pipeline._pre_enrich_biomed_metadata",
+            lambda *args, **kwargs: None,
+        )
 
         canonical = parse_and_persist(
             project_root=project_root,
@@ -236,6 +240,102 @@ def test_parse_and_persist_writes_sections_and_parsed_json(monkeypatch) -> None:
             ("Method", "Method text", 2),
         ]
         assert paper_rows == [("Sample Title", "Sample abstract", "2501.12345", 2025, "arXiv", None, 0.95, "done")]
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_parse_and_persist_pre_enriches_biomed_metadata_and_uses_pmc(monkeypatch) -> None:
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        from paperlab.parsing.pipeline import parse_and_persist
+
+        db_path = init_project(project_root)
+        now = "2026-04-10T00:00:00+00:00"
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO papers (
+                    paper_uid,
+                    parse_status,
+                    enrich_status,
+                    summary_status,
+                    qa_status,
+                    graph_status,
+                    citation_status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, 'pending', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)
+                """,
+                ("paper-biomed", now, now),
+            )
+            paper_row_id = cursor.lastrowid
+            conn.commit()
+
+        monkeypatch.setattr(
+            "paperlab.parsing.pipeline.read_pdf_head_text",
+            lambda _path, max_pages=2: "Nature Medicine\nhttps://doi.org/10.1038/s41591-026-04247-3",
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.pubmed_client.resolve_by_doi",
+            lambda doi, api_key='': {
+                "pmid": "41862772",
+                "pmcid": "PMC1234567",
+                "doi": "10.1038/s41591-026-04247-3",
+                "journal": "Nature Medicine",
+                "publication_type": "Journal Article",
+                "mesh_terms": ["Heart Failure", "Smartwatch"],
+                "title": "Remote monitoring of heart failure exacerbations using a smartwatch",
+            },
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.pmc_client.fetch_fulltext_xml",
+            lambda pmcid: "<article></article>",
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.pmc_client.parse_jats_xml",
+            lambda xml_text: CanonicalPaper(
+                source="pmc",
+                paper_id="pmc-paper",
+                title="Remote monitoring of heart failure exacerbations using a smartwatch",
+                authors=[{"name": "Author"}],
+                abstract="Structured abstract",
+                year=2026,
+                venue="Nature Medicine",
+                doi="10.1038/s41591-026-04247-3",
+                arxiv_id=None,
+                sections=[CanonicalSection(name="Introduction", text="Intro", order=1)],
+                references_raw=[],
+                full_text="Intro",
+                parse_quality=1.0,
+            ),
+        )
+
+        canonical = parse_and_persist(
+            project_root=project_root,
+            paper_id=paper_row_id,
+            input_path="biomed.pdf",
+        )
+
+        assert canonical.source == "pmc"
+
+        with sqlite3.connect(db_path) as conn:
+            row = conn.execute(
+                "SELECT pmid, pmcid, journal, publication_type, mesh_terms, parse_status FROM papers WHERE id = ?",
+                (paper_row_id,),
+            ).fetchone()
+
+        assert row[0] == "41862772"
+        assert row[1] == "PMC1234567"
+        assert row[2] == "Nature Medicine"
+        assert row[3] == "Journal Article"
+        assert json.loads(row[4]) == ["Heart Failure", "Smartwatch"]
+        assert row[5] == "done"
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
 

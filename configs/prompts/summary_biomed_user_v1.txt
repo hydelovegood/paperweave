@@ -1,0 +1,8 @@
+请分析以下论文并生成结构化摘要：
+
+# {paper_title}
+
+## Abstract
+{paper_abstract}
+
+{paper_sections}

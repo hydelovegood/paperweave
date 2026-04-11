@@ -67,6 +67,7 @@ class SecretSettings:
     openai_api_key: str
     semantic_scholar_api_key: str
     unpaywall_email: str
+    ncbi_api_key: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +143,7 @@ def load_settings(project_root: Path | str, config_path: Path | str | None = Non
             openai_api_key=merged_env.get("OPENAI_API_KEY", ""),
             semantic_scholar_api_key=merged_env.get("SEMANTIC_SCHOLAR_API_KEY", ""),
             unpaywall_email=merged_env.get("UNPAYWALL_EMAIL", ""),
+            ncbi_api_key=merged_env.get("NCBI_API_KEY", ""),
         ),
         prompts=prompts,
     )

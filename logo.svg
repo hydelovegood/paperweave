@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="h1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="h2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="v1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0e7ff"/>
+      <stop offset="100%" stop-color="#c7d2fe"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+
+  <!--
+    Basket weave: 2 horizontal + 2 vertical strips
+    Checkerboard pattern:
+      H1-V1: H1 behind V1
+      H1-V2: H1 in front of V2
+      H2-V1: H2 in front of V1
+      H2-V2: H2 behind V2
+  -->
+
+  <!-- Step 1: H1 full -->
+  <rect x="56" y="168" width="400" height="64" rx="10" fill="url(#h1)"/>
+
+  <!-- Step 2: V1 full (on top of H1 -> H1 behind V1) -->
+  <rect x="168" y="56" width="64" height="400" rx="10" fill="url(#v1)"/>
+
+  <!-- Step 3: H2 full (on top of V1 -> H2 in front of V1) -->
+  <rect x="56" y="280" width="400" height="64" rx="10" fill="url(#h2)"/>
+
+  <!-- Step 4: V2 pieces (drawn last -> on top of H2 -> H2 behind V2) -->
+  <!-- V2 gap at y=168..232 means H1 shows through -> H1 in front of V2 -->
+
+  <!-- V2 top: rounded top corners only -->
+  <path d="M290 56 H334 Q344 56 344 66 V168 H280 V66 Q280 56 290 56 Z" fill="#c7d2fe"/>
+
+  <!-- V2 mid: between H1 and H2, no rounding -->
+  <rect x="280" y="232" width="64" height="48" fill="#c7d2fe"/>
+
+  <!-- V2 bottom: covers H2 crossing + below, rounded bottom corners only -->
+  <path d="M280 280 H344 V446 Q344 456 334 456 H290 Q280 456 280 446 Z" fill="#c7d2fe"/>
+</svg>

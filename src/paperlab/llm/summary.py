@@ -23,6 +23,19 @@ REQUIRED_SUMMARY_FIELDS = (
     "evidence",
 )
 
+REQUIRED_BIOMED_SUMMARY_FIELDS = (
+    "study_question",
+    "study_design",
+    "participants",
+    "intervention",
+    "comparator",
+    "primary_outcome",
+    "main_findings",
+    "limitations_bias",
+    "clinical_relevance",
+    "evidence_anchors",
+)
+
 
 def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
     root = Path(project_root).expanduser().resolve()
@@ -30,12 +43,26 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
 
     db_path = (root / settings.database.path).resolve()
     parsed_path = root / settings.paths.parsed_dir / f"{paper_id}.json"
-    system_prompt_path = root / settings.prompts.summary_system
-    user_prompt_path = root / settings.prompts.summary_user
-    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
 
     if not parsed_path.exists():
         raise FileNotFoundError(f"Parsed paper not found: {parsed_path}")
+
+    paper = json.loads(parsed_path.read_text(encoding="utf-8"))
+
+    from paperlab.parsing.classifier import classify_paper
+    paper_type = classify_paper(paper)
+
+    if paper_type == "biomedical":
+        system_prompt_path = root / "configs" / "prompts" / "summary_biomed_v1.txt"
+        user_prompt_path = root / "configs" / "prompts" / "summary_biomed_user_v1.txt"
+        if not system_prompt_path.exists():
+            system_prompt_path = root / settings.prompts.summary_system
+            user_prompt_path = root / settings.prompts.summary_user
+    else:
+        system_prompt_path = root / settings.prompts.summary_system
+        user_prompt_path = root / settings.prompts.summary_user
+
+    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
 
     input_hash = compute_summary_input_hash(
         parsed_path, system_prompt_path, user_prompt_path, settings.llm.summary_model,
@@ -45,7 +72,6 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
 
     started_at = datetime.now(timezone.utc).isoformat()
 
-    paper = json.loads(parsed_path.read_text(encoding="utf-8"))
     system_prompt = system_prompt_path.read_text(encoding="utf-8")
     system_prompt = system_prompt.replace("{research_context}", settings.llm.research_context)
 
@@ -149,7 +175,11 @@ def select_papers_for_summary(db_path: Path | str) -> list[int]:
 
 
 def _validate_summary(data: dict) -> None:
-    missing = [f for f in REQUIRED_SUMMARY_FIELDS if f not in data]
+    if any(f in data for f in REQUIRED_BIOMED_SUMMARY_FIELDS):
+        required = REQUIRED_BIOMED_SUMMARY_FIELDS
+    else:
+        required = REQUIRED_SUMMARY_FIELDS
+    missing = [f for f in required if f not in data]
     if missing:
         raise ValueError(f"Summary missing required fields: {', '.join(missing)}")
 

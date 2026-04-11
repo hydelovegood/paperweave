@@ -42,6 +42,11 @@ SCHEMA_STATEMENTS = (
         arxiv_id TEXT,
         openalex_id TEXT,
         s2_paper_id TEXT,
+        pmid TEXT,
+        pmcid TEXT,
+        publication_type TEXT,
+        journal TEXT,
+        mesh_terms TEXT,
         parse_quality REAL,
         language TEXT DEFAULT 'en',
         parse_status TEXT DEFAULT 'pending',
@@ -169,6 +174,9 @@ def _ensure_papers_columns(connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE papers ADD COLUMN parse_quality REAL")
     if "citation_status" not in columns:
         connection.execute("ALTER TABLE papers ADD COLUMN citation_status TEXT DEFAULT 'pending'")
+    for col in ("pmid", "pmcid", "publication_type", "journal", "mesh_terms"):
+        if col not in columns:
+            connection.execute(f"ALTER TABLE papers ADD COLUMN {col} TEXT")
 
     qa_columns = {
         row[1]

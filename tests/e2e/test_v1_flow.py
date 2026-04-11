@@ -134,6 +134,10 @@ def test_v1_full_flow(monkeypatch):
             "paperlab.parsing.pipeline.parse_document",
             lambda *a, **kw: fake_paper,
         )
+        monkeypatch.setattr(
+            "paperlab.parsing.pipeline._pre_enrich_biomed_metadata",
+            lambda *args, **kwargs: None,
+        )
 
         from paperlab.parsing.pipeline import parse_and_persist
         canonical = parse_and_persist(project_root, paper_id, pdf_dir / "sample.pdf")

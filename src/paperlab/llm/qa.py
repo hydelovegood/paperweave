@@ -12,6 +12,7 @@ from paperlab.storage.task_runs import is_task_completed, record_task_run
 
 
 QA_TYPES = ("reviewer", "interview", "author_defense")
+BIOMED_QA_TYPES = ("methodological", "clinical", "interview")
 REQUIRED_QA_FIELDS = ("type", "question", "answer", "category", "depth_level", "answer_mode", "evidence")
 
 
@@ -21,12 +22,28 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
 
     db_path = (root / settings.database.path).resolve()
     parsed_path = root / settings.paths.parsed_dir / f"{paper_id}.json"
-    system_prompt_path = root / settings.prompts.qa_system
-    user_prompt_path = root / settings.prompts.qa_user
-    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
 
     if not parsed_path.exists():
         raise FileNotFoundError(f"Parsed paper not found: {parsed_path}")
+
+    paper = json.loads(parsed_path.read_text(encoding="utf-8"))
+
+    from paperlab.parsing.classifier import classify_paper
+    paper_type = classify_paper(paper)
+
+    if paper_type == "biomedical":
+        system_prompt_path = root / "configs" / "prompts" / "qa_biomed_v1.txt"
+        user_prompt_path = root / "configs" / "prompts" / "qa_biomed_user_v1.txt"
+        if not system_prompt_path.exists():
+            system_prompt_path = root / settings.prompts.qa_system
+            user_prompt_path = root / settings.prompts.qa_user
+        valid_types = BIOMED_QA_TYPES
+    else:
+        system_prompt_path = root / settings.prompts.qa_system
+        user_prompt_path = root / settings.prompts.qa_user
+        valid_types = QA_TYPES
+
+    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
 
     input_hash = compute_qa_input_hash(
         parsed_path, system_prompt_path, user_prompt_path, settings.llm.qa_model,
@@ -36,7 +53,6 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
 
     started_at = datetime.now(timezone.utc).isoformat()
 
-    paper = json.loads(parsed_path.read_text(encoding="utf-8"))
     system_prompt = system_prompt_path.read_text(encoding="utf-8")
 
     user_template = user_prompt_path.read_text(encoding="utf-8")
@@ -61,7 +77,7 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
 
         log_path = _write_llm_log(root, "qa", paper_id, started_at, raw)
         qa_items = extract_json_array(raw)
-        _validate_qa_items(qa_items)
+        _validate_qa_items(qa_items, valid_types)
 
         ended_at = datetime.now(timezone.utc).isoformat()
         now = ended_at
@@ -156,12 +172,12 @@ def select_papers_for_qa(db_path: Path | str) -> list[int]:
     return [row[0] for row in rows]
 
 
-def _validate_qa_items(items: list[dict]) -> None:
+def _validate_qa_items(items: list[dict], valid_types: tuple[str, ...] = QA_TYPES) -> None:
     for i, item in enumerate(items):
         missing = [f for f in REQUIRED_QA_FIELDS if f not in item]
         if missing:
             raise ValueError(f"QA item {i} missing required fields: {', '.join(missing)}")
-        if item["type"] not in QA_TYPES:
+        if item["type"] not in valid_types:
             raise ValueError(f"QA item {i} has invalid type: {item['type']}")
 
 

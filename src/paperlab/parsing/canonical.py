@@ -25,6 +25,11 @@ class CanonicalPaper:
     references_raw: list[str]
     full_text: str
     parse_quality: float | None
+    pmid: str | None = None
+    pmcid: str | None = None
+    journal: str | None = None
+    mesh_terms: list[str] | None = None
+    publication_type: str | None = None
 
     def to_dict(self) -> dict:
         payload = asdict(self)

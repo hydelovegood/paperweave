@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +11,7 @@ import requests
 from paperlab.config import load_settings
 from paperlab.enrich import crossref_client as crossref
 from paperlab.enrich import openalex_client as openalex
+from paperlab.enrich import pubmed_client as pubmed
 from paperlab.enrich import semanticscholar_client as s2
 from paperlab.enrich import unpaywall_client as unpaywall
 from paperlab.storage.status import compute_citations_input_hash
@@ -32,6 +34,7 @@ def track_forward_citations(
     max_r = max_results or settings.citations.default_max_results
     email = settings.secrets.unpaywall_email
     s2_key = settings.secrets.semantic_scholar_api_key
+    ncbi_key = settings.secrets.ncbi_api_key
 
     paper = _get_paper(db_path, paper_id)
     input_hash = compute_citations_input_hash(
@@ -48,14 +51,14 @@ def track_forward_citations(
 
     try:
         # Resolve to external IDs
-        resolved = _resolve(paper, email, s2_key)
+        resolved = _resolve(paper, email, s2_key, ncbi_key)
         if resolved:
             _update_paper_ids(db_path, paper_id, resolved)
 
         # Fetch forward citations
         citations = _fetch_citations(
             {**paper, **(resolved or {})},
-            y_start, y_end, max_r, email, s2_key,
+            y_start, y_end, max_r, email, s2_key, ncbi_key,
         )
 
         # Persist citing papers, edges, links
@@ -108,7 +111,7 @@ def select_papers_for_citations(db_path: Path | str) -> list[int]:
 def _get_paper(db_path: Path, paper_id: int) -> dict:
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
-            "SELECT canonical_title, doi, arxiv_id, openalex_id, s2_paper_id FROM papers WHERE id = ?",
+            "SELECT canonical_title, doi, arxiv_id, openalex_id, s2_paper_id, pmid, pmcid FROM papers WHERE id = ?",
             (paper_id,),
         ).fetchone()
     if not row:
@@ -119,11 +122,24 @@ def _get_paper(db_path: Path, paper_id: int) -> dict:
         "arxiv_id": row[2],
         "openalex_id": row[3],
         "s2_paper_id": row[4],
+        "pmid": row[5],
+        "pmcid": row[6],
     }
 
 
-def _resolve(paper: dict, email: str, s2_key: str) -> dict | None:
+def _resolve(paper: dict, email: str, s2_key: str, ncbi_key: str = "") -> dict | None:
     result: dict = {}
+
+    # PubMed: try DOI, then title (first for biomedical coverage)
+    if paper.get("doi"):
+        pm = _safe_resolve(lambda: pubmed.resolve_by_doi(paper["doi"], api_key=ncbi_key))
+        if pm:
+            result.update(pm)
+
+    if paper.get("title") and not result.get("pmid"):
+        pm = _safe_resolve(lambda: pubmed.resolve_by_title(paper["title"], api_key=ncbi_key))
+        if pm:
+            result.update(pm)
 
     # OpenAlex: try DOI, then title
     if paper.get("doi"):
@@ -173,7 +189,20 @@ def _fetch_citations(
     max_results: int,
     email: str,
     s2_key: str,
+    ncbi_key: str = "",
 ) -> list[dict]:
+    if paper.get("pmid"):
+        try:
+            citations = pubmed.get_forward_citations(
+                paper["pmid"], year_start, year_end, max_results, api_key=ncbi_key,
+            )
+            if citations:
+                for c in citations:
+                    c["_source"] = "pubmed"
+                return citations
+        except Exception:
+            pass
+
     if paper.get("openalex_id"):
         try:
             citations = openalex.get_forward_citations(
@@ -187,12 +216,15 @@ def _fetch_citations(
 
     s2_identifier = paper.get("s2_id") or paper.get("s2_paper_id")
     if s2_identifier:
-        citations = s2.get_forward_citations(
-            s2_identifier, year_start, year_end, max_results, api_key=s2_key,
-        )
-        for c in citations:
-            c["_source"] = "semanticscholar"
-        return citations
+        try:
+            citations = s2.get_forward_citations(
+                s2_identifier, year_start, year_end, max_results, api_key=s2_key,
+            )
+            for c in citations:
+                c["_source"] = "semanticscholar"
+            return citations
+        except Exception:
+            pass
 
     return []
 
@@ -207,6 +239,16 @@ def _update_paper_ids(db_path: Path, paper_id: int, resolved: dict) -> None:
     normalized_doi = _normalize_doi(resolved.get("doi"))
     if normalized_doi and not _normalize_doi(_get_paper(db_path, paper_id).get("doi")):
         updates["doi"] = normalized_doi
+    if resolved.get("pmid"):
+        updates["pmid"] = resolved["pmid"]
+    if resolved.get("pmcid"):
+        updates["pmcid"] = resolved["pmcid"]
+    if resolved.get("journal"):
+        updates["journal"] = resolved["journal"]
+    if resolved.get("publication_type"):
+        updates["publication_type"] = resolved["publication_type"]
+    if resolved.get("mesh_terms"):
+        updates["mesh_terms"] = json.dumps(resolved["mesh_terms"], ensure_ascii=False)
 
     if not updates:
         return
@@ -238,9 +280,10 @@ def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
             """
             INSERT INTO papers (
                 paper_uid, canonical_title, year, doi, arxiv_id, openalex_id, s2_paper_id,
+                pmid, pmcid, publication_type, journal,
                 parse_status, enrich_status, summary_status, qa_status, graph_status, citation_status,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)
             """,
             (
                 f"paper-{uuid4()}",
@@ -250,6 +293,10 @@ def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
                 citing.get("arxiv_id"),
                 citing.get("openalex_id"),
                 citing.get("s2_id"),
+                citing.get("pmid"),
+                citing.get("pmcid"),
+                citing.get("publication_type"),
+                citing.get("journal"),
                 now,
                 now,
             ),
