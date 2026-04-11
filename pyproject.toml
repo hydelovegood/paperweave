@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperlab"
+version = "0.1.0"
+description = "Local paper library workflow for structured summaries, Q&A, and citation tracking"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0",
+    "requests>=2.28",
+    "PyMuPDF>=1.24",
+    "deepxiv-sdk>=0.2.3",
+]
+
+[project.scripts]
+paperctl = "paperlab.cli.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

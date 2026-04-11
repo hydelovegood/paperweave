@@ -1,0 +1,31 @@
+database:
+  path: db/papers.db
+
+paths:
+  parsed_dir: data/parsed
+  cache_dir: data/cache
+  export_dir: data/exports
+  logs_dir: data/logs
+
+parsing:
+  prefer_deepxiv_for_arxiv: true
+  pymupdf_section_split: true
+
+llm:
+  base_url: https://open.bigmodel.cn/api/coding/paas/v4
+  summary_model: glm-5.1
+  qa_model: glm-5.1
+  lang: zh
+  max_retries: 2
+  research_context: "多智能体强化学习 (multi-agent reinforcement learning)"
+
+citations:
+  default_year_start: 2024
+  default_year_end: 2026
+  default_max_results: 30
+  download_oa_only: true
+
+export:
+  summary_file: data/exports/summary.md
+  qa_file: data/exports/QA.md
+
