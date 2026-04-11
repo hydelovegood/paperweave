@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="PaperWeave logo" width="300">
+</p>
+
 # PaperWeave（溯源文库）
 
 > Local-first CLI for building a structured paper library with parsing, summaries, deep Q&A, and forward-citation tracking.
