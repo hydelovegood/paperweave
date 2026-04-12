@@ -4,7 +4,7 @@ from pathlib import Path
 def test_package_exports_version():
     import paperlab
 
-    assert paperlab.__version__ == "0.2.1"
+    assert paperlab.__version__ == "0.2.2"
 
 
 def test_runtime_dependencies_are_declared():

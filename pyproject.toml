@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paperweave"
-version = "0.2.1"
+version = "0.2.2"
 description = "PaperWeave (溯源文库): local-first paper library CLI for structured summaries, Q&A, and citation tracking"
 requires-python = ">=3.10"
 dependencies = [

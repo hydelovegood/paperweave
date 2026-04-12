@@ -111,3 +111,25 @@ def test_init_project_bootstraps_missing_project_files() -> None:
         assert (tmp_root / ".env.example").exists()
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def test_init_project_bootstraps_production_ready_prompts() -> None:
+    tmp_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    tmp_root.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+
+        init_project(str(tmp_root))
+
+        summary_system = (tmp_root / "configs" / "prompts" / "summary_system_v1.txt").read_text(encoding="utf-8")
+        qa_system = (tmp_root / "configs" / "prompts" / "qa_system_v1.txt").read_text(encoding="utf-8")
+        biomed_summary_system = (tmp_root / "configs" / "prompts" / "summary_biomed_v1.txt").read_text(encoding="utf-8")
+        biomed_qa_system = (tmp_root / "configs" / "prompts" / "qa_biomed_v1.txt").read_text(encoding="utf-8")
+
+        assert '"problem"' in summary_system
+        assert '"author_defense"' in qa_system
+        assert '"study_question"' in biomed_summary_system
+        assert '"methodological"' in biomed_qa_system
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
