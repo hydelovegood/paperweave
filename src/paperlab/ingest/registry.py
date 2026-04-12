@@ -38,6 +38,15 @@ def register_scanned_files(db_path: Path | str, scanned_files: list[ScannedFile]
                 if current_sha == scanned.sha256:
                     continue
 
+                duplicate_sha = conn.execute(
+                    "SELECT id FROM files WHERE sha256 = ? AND id != ?",
+                    (scanned.sha256, file_id),
+                ).fetchone()
+                if duplicate_sha:
+                    _remove_duplicate_file_entry(conn, file_id)
+                    skipped_duplicates += 1
+                    continue
+
                 conn.execute(
                     """
                     UPDATE files
@@ -130,3 +139,34 @@ def register_scanned_files(db_path: Path | str, scanned_files: list[ScannedFile]
         skipped_duplicates=skipped_duplicates,
         updated=updated,
     )
+
+
+def _remove_duplicate_file_entry(conn: sqlite3.Connection, file_id: int) -> None:
+    paper_ids = [
+        row[0]
+        for row in conn.execute(
+            "SELECT paper_id FROM paper_files WHERE file_id = ?",
+            (file_id,),
+        ).fetchall()
+    ]
+
+    conn.execute("DELETE FROM paper_files WHERE file_id = ?", (file_id,))
+    conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
+
+    for paper_id in paper_ids:
+        remaining = conn.execute(
+            "SELECT 1 FROM paper_files WHERE paper_id = ? LIMIT 1",
+            (paper_id,),
+        ).fetchone()
+        if remaining:
+            continue
+        conn.execute("DELETE FROM sections WHERE paper_id = ?", (paper_id,))
+        conn.execute("DELETE FROM summaries WHERE paper_id = ?", (paper_id,))
+        conn.execute("DELETE FROM qa_items WHERE paper_id = ?", (paper_id,))
+        conn.execute("DELETE FROM citation_edges WHERE citing_paper_id = ? OR cited_paper_id = ?", (paper_id, paper_id))
+        conn.execute("DELETE FROM external_links WHERE paper_id = ?", (paper_id,))
+        conn.execute(
+            "DELETE FROM task_runs WHERE target_type = 'paper' AND target_id = ?",
+            (str(paper_id),),
+        )
+        conn.execute("DELETE FROM papers WHERE id = ?", (paper_id,))

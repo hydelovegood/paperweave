@@ -46,12 +46,12 @@ PaperWeave 虽然是一个命令行工具，但**不要求你会写代码**。
 4. 依次运行下面这些命令：
 
 ```bash
-paperctl init C:\research\paperweave
-paperctl ingest C:\research\paperweave C:\papers\my-study
-paperctl summarize C:\research\paperweave --changed
-paperctl qa C:\research\paperweave --changed
-paperctl export summary C:\research\paperweave
-paperctl export qa C:\research\paperweave
+paperweave init C:\research\paperweave
+paperweave ingest C:\research\paperweave C:\papers\my-study
+paperweave summarize C:\research\paperweave --changed
+paperweave qa C:\research\paperweave --changed
+paperweave export summary C:\research\paperweave
+paperweave export qa C:\research\paperweave
 ```
 
 运行完成后，你最值得先看的文件是：
@@ -62,9 +62,9 @@ paperctl export qa C:\research\paperweave
 如果你只是想先试试，甚至可以先只跑这三条：
 
 ```bash
-paperctl init C:\research\paperweave
-paperctl ingest C:\research\paperweave C:\papers\my-study
-paperctl summarize C:\research\paperweave --changed
+paperweave init C:\research\paperweave
+paperweave ingest C:\research\paperweave C:\papers\my-study
+paperweave summarize C:\research\paperweave --changed
 ```
 
 ## 适合谁
@@ -246,6 +246,14 @@ python -m venv .venv
 pip install -e .
 ```
 
+Installed command:
+
+```bash
+paperweave --help
+```
+
+Compatibility alias: `paperctl` is still available.
+
 ---
 
 ## Configuration
@@ -306,7 +314,7 @@ PaperWeave still stores landing-page / DOI links for non-OA papers; the flag mai
 ### 1. Initialize a Project
 
 ```bash
-paperctl init C:\research\paperweave
+paperweave init C:\research\paperweave
 ```
 
 ### 2. Ingest Papers
@@ -314,19 +322,19 @@ paperctl init C:\research\paperweave
 Single PDF:
 
 ```bash
-paperctl ingest C:\research\paperweave "C:\papers\sample.pdf"
+paperweave ingest C:\research\paperweave "C:\papers\sample.pdf"
 ```
 
 Whole folder:
 
 ```bash
-paperctl ingest C:\research\paperweave C:\papers
+paperweave ingest C:\research\paperweave C:\papers
 ```
 
 Recursive:
 
 ```bash
-paperctl ingest C:\research\paperweave C:\papers --recursive
+paperweave ingest C:\research\paperweave C:\papers --recursive
 ```
 
 ### 3. Generate Summaries
@@ -334,69 +342,69 @@ paperctl ingest C:\research\paperweave C:\papers --recursive
 Changed or stale papers:
 
 ```bash
-paperctl summarize C:\research\paperweave --changed
+paperweave summarize C:\research\paperweave --changed
 ```
 
 All parsed papers:
 
 ```bash
-paperctl summarize C:\research\paperweave --all
+paperweave summarize C:\research\paperweave --all
 ```
 
 Specific papers:
 
 ```bash
-paperctl summarize C:\research\paperweave --paper-ids 1 2 3
+paperweave summarize C:\research\paperweave --paper-ids 1 2 3
 ```
 
 Force rerun:
 
 ```bash
-paperctl summarize C:\research\paperweave --paper-ids 1 2 3 --force
+paperweave summarize C:\research\paperweave --paper-ids 1 2 3 --force
 ```
 
 ### 4. Generate QA
 
 ```bash
-paperctl qa C:\research\paperweave --changed
+paperweave qa C:\research\paperweave --changed
 ```
 
 Or:
 
 ```bash
-paperctl qa C:\research\paperweave --all
+paperweave qa C:\research\paperweave --all
 ```
 
 Force rerun:
 
 ```bash
-paperctl qa C:\research\paperweave --paper-ids 1 2 3 --force
+paperweave qa C:\research\paperweave --paper-ids 1 2 3 --force
 ```
 
 ### 5. Track Forward Citations
 
 ```bash
-paperctl citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
+paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
 ```
 
 Limit result count:
 
 ```bash
-paperctl citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026 --max-results 20
+paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026 --max-results 20
 ```
 
 ### 6. Export Results
 
 ```bash
-paperctl export summary C:\research\paperweave
-paperctl export qa C:\research\paperweave
+paperweave export summary C:\research\paperweave
+paperweave export qa C:\research\paperweave
 ```
 
 ### 7. Run Diagnostics
 
 ```bash
-paperctl doctor C:\research\paperweave
-paperctl doctor C:\research\paperweave --check-llm
+paperweave doctor C:\research\paperweave
+paperweave doctor C:\research\paperweave --check-llm
 ```
 
 ---
@@ -404,13 +412,13 @@ paperctl doctor C:\research\paperweave --check-llm
 ## Example Workflow
 
 ```bash
-paperctl init C:\research\paperweave
-paperctl ingest C:\research\paperweave C:\papers --recursive
-paperctl summarize C:\research\paperweave --changed
-paperctl qa C:\research\paperweave --changed
-paperctl citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
-paperctl export summary C:\research\paperweave
-paperctl export qa C:\research\paperweave
+paperweave init C:\research\paperweave
+paperweave ingest C:\research\paperweave C:\papers --recursive
+paperweave summarize C:\research\paperweave --changed
+paperweave qa C:\research\paperweave --changed
+paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
+paperweave export summary C:\research\paperweave
+paperweave export qa C:\research\paperweave
 ```
 
 ---

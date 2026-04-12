@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import argparse
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +11,8 @@ from openai import APIConnectionError, APIError, APITimeoutError
 
 from paperlab.config import load_settings
 from paperlab.llm.summary import select_papers_for_summary, summarize_paper
+
+log = logging.getLogger(__name__)
 
 
 def summarize_path(
@@ -37,7 +39,7 @@ def summarize_path(
     else:
         target_ids = []
     if not target_ids:
-        print("No papers to summarize.")
+        log.info("No papers to summarize.")
         return []
 
     completed = []
@@ -45,9 +47,9 @@ def summarize_path(
         try:
             summarize_paper(root, pid)
             completed.append(pid)
-            print(f"Summarized paper {pid}")
+            log.info("Summarized paper %d", pid)
         except (FileNotFoundError, ValueError, json.JSONDecodeError, APIError, APIConnectionError, APITimeoutError, requests.RequestException) as exc:
-            print(f"Failed to summarize paper {pid}: {exc}")
+            log.warning("Failed to summarize paper %d: %s", pid, exc)
     return completed
 
 
@@ -68,27 +70,3 @@ def _select_all_parsed(db_path: Path) -> list[int]:
             "SELECT id FROM papers WHERE parse_status = 'done' ORDER BY id"
         ).fetchall()
     return [row[0] for row in rows]
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="paperctl-summarize")
-    parser.add_argument("project_root")
-    parser.add_argument("--paper-ids", nargs="+", type=int)
-    parser.add_argument("--changed", action="store_true")
-    parser.add_argument("--all", action="store_true")
-    parser.add_argument("--force", action="store_true")
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    completed = summarize_path(
-        args.project_root,
-        paper_ids=args.paper_ids,
-        changed=args.changed or not args.all,
-        all_=args.all,
-        force=args.force,
-    )
-    print(f"\nSummary complete: {len(completed)} paper(s) processed")
-    return 0

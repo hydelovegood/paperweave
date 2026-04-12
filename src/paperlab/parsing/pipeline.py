@@ -8,53 +8,15 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from paperlab.config import load_settings
+from paperlab.enrich.biomed_pre_enrich import pre_enrich_biomed_metadata
 from paperlab.parsing.canonical import CanonicalPaper
 from paperlab.parsing.deepxiv_parser import (
     DeepXivRecoverableError,
     parse_arxiv_paper,
     search_arxiv_paper,
 )
+from paperlab.parsing.pdf_utils import extract_arxiv_id, extract_doi, read_pdf_text, read_pdf_head_text
 from paperlab.parsing.pymupdf_parser import parse_pdf
-
-
-ARXIV_ID_RE = re.compile(r"arXiv:?\s*(\d{4}\.\d{4,5})", re.IGNORECASE)
-DOI_RE = re.compile(r"\b(10\.\d{4,9}/[-._;()/:A-Z0-9]+)\b", re.IGNORECASE)
-
-
-def extract_arxiv_id(text: str) -> str | None:
-    match = ARXIV_ID_RE.search(text)
-    return match.group(1) if match else None
-
-
-def extract_doi(text: str) -> str | None:
-    match = DOI_RE.search(text)
-    if not match:
-        return None
-    return match.group(1).rstrip(".,);]")
-
-
-def read_pdf_text(pdf_path: Path | str) -> str:
-    try:
-        import fitz
-    except ImportError as exc:
-        raise RuntimeError("PyMuPDF is not installed") from exc
-
-    document = fitz.open(Path(pdf_path).expanduser().resolve())
-    text = "".join(page.get_text() for page in document)
-    document.close()
-    return text
-
-
-def read_pdf_head_text(pdf_path: Path | str, max_pages: int = 2) -> str:
-    try:
-        import fitz
-    except ImportError as exc:
-        raise RuntimeError("PyMuPDF is not installed") from exc
-
-    document = fitz.open(Path(pdf_path).expanduser().resolve())
-    text = "".join(document[index].get_text() for index in range(min(max_pages, len(document))))
-    document.close()
-    return text
 
 
 def _get_pmcid(db_path: Path, paper_id: int) -> str | None:
@@ -95,80 +57,6 @@ def _apply_biomed_metadata(canonical: CanonicalPaper, metadata: dict) -> Canonic
         mesh_terms=canonical.mesh_terms or metadata.get("mesh_terms"),
         publication_type=canonical.publication_type or metadata.get("publication_type"),
     )
-
-
-def _pre_enrich_biomed_metadata(
-    db_path: Path,
-    paper_id: int,
-    input_path: Path | str,
-    ncbi_api_key: str = "",
-) -> None:
-    existing = _get_biomed_metadata(db_path, paper_id)
-    if existing.get("pmid") or existing.get("pmcid"):
-        return
-
-    from paperlab.enrich import pubmed_client
-
-    try:
-        head_text = read_pdf_head_text(input_path, max_pages=2)
-    except Exception:
-        return
-    doi = extract_doi(head_text)
-    resolved = None
-    if doi:
-        resolved = pubmed_client.resolve_by_doi(doi, api_key=ncbi_api_key)
-    if resolved is None:
-        title_guess = _extract_title_guess(head_text)
-        if title_guess:
-            resolved = pubmed_client.resolve_by_title(title_guess, api_key=ncbi_api_key)
-
-    if not resolved:
-        return
-
-    now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as connection:
-        connection.execute(
-            """
-            UPDATE papers
-            SET doi = COALESCE(doi, ?),
-                pmid = COALESCE(pmid, ?),
-                pmcid = COALESCE(pmcid, ?),
-                journal = COALESCE(journal, ?),
-                publication_type = COALESCE(publication_type, ?),
-                mesh_terms = COALESCE(mesh_terms, ?),
-                canonical_title = COALESCE(canonical_title, ?),
-                updated_at = ?
-            WHERE id = ?
-            """,
-            (
-                resolved.get("doi"),
-                resolved.get("pmid"),
-                resolved.get("pmcid"),
-                resolved.get("journal"),
-                resolved.get("publication_type"),
-                json.dumps(resolved.get("mesh_terms"), ensure_ascii=False) if resolved.get("mesh_terms") else None,
-                resolved.get("title"),
-                now,
-                paper_id,
-            ),
-        )
-        connection.commit()
-
-
-def _extract_title_guess(head_text: str) -> str | None:
-    for line in head_text.splitlines():
-        text = line.strip()
-        if not text:
-            continue
-        lowered = text.lower()
-        if lowered.startswith("https://") or lowered.startswith("http://"):
-            continue
-        if lowered.startswith("nature ") or lowered.startswith("article"):
-            continue
-        if len(text) < 12:
-            continue
-        return text
-    return None
 
 
 def _parse_with_pmc_fallback(
@@ -244,9 +132,9 @@ def parse_and_persist(
     deepxiv_token: str | None = None,
 ) -> CanonicalPaper:
     root = Path(project_root).expanduser().resolve()
-    settings = load_settings(root)
+    settings = load_settings(root, require_prompts=False)
     db_path = (root / settings.database.path).resolve()
-    _pre_enrich_biomed_metadata(
+    pre_enrich_biomed_metadata(
         db_path=db_path,
         paper_id=paper_id,
         input_path=input_path,

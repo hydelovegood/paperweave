@@ -7,6 +7,7 @@ from pathlib import Path
 
 from paperlab.config import load_settings
 from paperlab.llm.client import call_llm, extract_json_array
+from paperlab.llm.task_common import infer_prompt_version, write_llm_log
 from paperlab.storage.status import compute_qa_input_hash
 from paperlab.storage.task_runs import is_task_completed, record_task_run
 
@@ -43,16 +44,6 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
         user_prompt_path = root / settings.prompts.qa_user
         valid_types = QA_TYPES
 
-    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
-
-    input_hash = compute_qa_input_hash(
-        parsed_path, system_prompt_path, user_prompt_path, settings.llm.qa_model,
-    )
-    if _can_reuse_existing_qa(db_path, paper_id, input_hash):
-        return _load_existing_qa(db_path, paper_id)
-
-    started_at = datetime.now(timezone.utc).isoformat()
-
     system_prompt = system_prompt_path.read_text(encoding="utf-8")
 
     user_template = user_prompt_path.read_text(encoding="utf-8")
@@ -62,6 +53,16 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
     user_prompt = user_template.replace("{paper_title}", paper.get("title", ""))
     user_prompt = user_prompt.replace("{paper_abstract}", paper.get("abstract", ""))
     user_prompt = user_prompt.replace("{paper_sections}", sections_text)
+
+    version = infer_prompt_version(system_prompt_path, user_prompt_path)
+
+    input_hash = compute_qa_input_hash(
+        parsed_path, system_prompt, user_prompt, settings.llm.qa_model, settings.llm.lang,
+    )
+    if _can_reuse_existing_qa(db_path, paper_id, input_hash):
+        return _load_existing_qa(db_path, paper_id)
+
+    started_at = datetime.now(timezone.utc).isoformat()
 
     raw = ""
     log_path = None
@@ -75,7 +76,7 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
             max_retries=settings.llm.max_retries,
         )
 
-        log_path = _write_llm_log(root, "qa", paper_id, started_at, raw)
+        log_path = write_llm_log(root, "qa", paper_id, started_at, raw)
         qa_items = extract_json_array(raw)
         _validate_qa_items(qa_items, valid_types)
 
@@ -158,7 +159,7 @@ def _can_reuse_existing_qa(db_path: Path, paper_id: int, input_hash: str) -> boo
 
     if row is None:
         return False
-    if row[0] == "stale":
+    if row[0] in {"stale", "failed"}:
         return False
     return is_task_completed(db_path, "qa", str(paper_id), input_hash)
 
@@ -167,7 +168,7 @@ def select_papers_for_qa(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
     with sqlite3.connect(db) as conn:
         rows = conn.execute(
-            "SELECT id FROM papers WHERE qa_status IN ('pending', 'stale') AND parse_status = 'done' ORDER BY id"
+            "SELECT id FROM papers WHERE qa_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()
     return [row[0] for row in rows]
 
@@ -179,20 +180,3 @@ def _validate_qa_items(items: list[dict], valid_types: tuple[str, ...] = QA_TYPE
             raise ValueError(f"QA item {i} missing required fields: {', '.join(missing)}")
         if item["type"] not in valid_types:
             raise ValueError(f"QA item {i} has invalid type: {item['type']}")
-
-
-def _infer_prompt_version(*paths: Path) -> str:
-    for path in paths:
-        for part in path.stem.split("_"):
-            if part.startswith("v") and part[1:].isdigit():
-                return part
-    return "v1"
-
-
-def _write_llm_log(root: Path, task_name: str, paper_id: int, started_at: str, raw: str) -> str:
-    safe_stamp = started_at.replace(":", "-")
-    log_dir = root / "data" / "logs" / "llm"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{task_name}_paper_{paper_id}_{safe_stamp}.txt"
-    log_path.write_text(raw, encoding="utf-8")
-    return str(log_path.relative_to(root))

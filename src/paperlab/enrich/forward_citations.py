@@ -26,7 +26,7 @@ def track_forward_citations(
     max_results: int | None = None,
 ) -> list[int]:
     root = Path(project_root).expanduser().resolve()
-    settings = load_settings(root)
+    settings = load_settings(root, require_prompts=False)
     db_path = (root / settings.database.path).resolve()
 
     y_start = year_start or settings.citations.default_year_start
@@ -103,7 +103,7 @@ def select_papers_for_citations(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
     with sqlite3.connect(db) as conn:
         rows = conn.execute(
-            "SELECT id FROM papers WHERE citation_status IN ('pending', 'stale') AND parse_status = 'done' ORDER BY id"
+            "SELECT id FROM papers WHERE citation_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()
     return [row[0] for row in rows]
 
@@ -129,57 +129,62 @@ def _get_paper(db_path: Path, paper_id: int) -> dict:
 
 def _resolve(paper: dict, email: str, s2_key: str, ncbi_key: str = "") -> dict | None:
     result: dict = {}
-
-    # PubMed: try DOI, then title (first for biomedical coverage)
-    if paper.get("doi"):
-        pm = _safe_resolve(lambda: pubmed.resolve_by_doi(paper["doi"], api_key=ncbi_key))
-        if pm:
-            result.update(pm)
-
-    if paper.get("title") and not result.get("pmid"):
-        pm = _safe_resolve(lambda: pubmed.resolve_by_title(paper["title"], api_key=ncbi_key))
-        if pm:
-            result.update(pm)
-
-    # OpenAlex: try DOI, then title
-    if paper.get("doi"):
-        oa = _safe_resolve(lambda: openalex.resolve_by_doi(paper["doi"], mailto=email))
-        if oa:
-            result.update(oa)
-
-    if paper.get("title") and not result.get("openalex_id"):
-        oa = _safe_resolve(lambda: openalex.resolve_by_title(paper["title"], mailto=email))
-        if oa:
-            result.update(oa)
-
-    # Semantic Scholar: try arXiv, DOI, then title
-    if paper.get("arxiv_id") and not result.get("s2_id"):
-        s2r = _safe_resolve(lambda: s2.resolve_by_arxiv(paper["arxiv_id"], api_key=s2_key))
-        if s2r:
-            result.update(s2r)
-
-    if paper.get("doi") and not result.get("s2_id"):
-        s2r = _safe_resolve(lambda: s2.resolve_by_doi(paper["doi"], api_key=s2_key))
-        if s2r:
-            result.update(s2r)
-
-    if paper.get("title") and not result.get("s2_id"):
-        s2r = _safe_resolve(lambda: s2.resolve_by_title(paper["title"], api_key=s2_key))
-        if s2r:
-            result.update(s2r)
-
-    # Crossref: try DOI, then title
-    if paper.get("doi") and not result.get("doi"):
-        cr = _safe_resolve(lambda: crossref.resolve_by_doi(paper["doi"], mailto=email))
-        if cr:
-            result.update(cr)
-
-    if paper.get("title") and not result.get("doi"):
-        cr = _safe_resolve(lambda: crossref.resolve_by_title(paper["title"], mailto=email))
-        if cr:
-            result.update(cr)
-
+    for step in _RESOLVE_STEPS:
+        if not step["has_input"](paper) or result.get(step["id_field"]):
+            continue
+        resolved = _safe_resolve(lambda fn=step["fn"]: fn(paper, email, s2_key, ncbi_key))
+        if resolved:
+            result.update(resolved)
     return result or None
+
+
+_RESOLVE_STEPS = [
+    {
+        "id_field": "pmid",
+        "has_input": lambda p: bool(p.get("doi")),
+        "fn": lambda p, _e, _s2, ncbi: pubmed.resolve_by_doi(p["doi"], api_key=ncbi),
+    },
+    {
+        "id_field": "pmid",
+        "has_input": lambda p: bool(p.get("title")),
+        "fn": lambda p, _e, _s2, ncbi: pubmed.resolve_by_title(p["title"], api_key=ncbi),
+    },
+    {
+        "id_field": "openalex_id",
+        "has_input": lambda p: bool(p.get("doi")),
+        "fn": lambda p, email, _s2, _n: openalex.resolve_by_doi(p["doi"], mailto=email),
+    },
+    {
+        "id_field": "openalex_id",
+        "has_input": lambda p: bool(p.get("title")),
+        "fn": lambda p, email, _s2, _n: openalex.resolve_by_title(p["title"], mailto=email),
+    },
+    {
+        "id_field": "s2_id",
+        "has_input": lambda p: bool(p.get("arxiv_id")),
+        "fn": lambda p, _e, s2_key, _n: s2.resolve_by_arxiv(p["arxiv_id"], api_key=s2_key),
+    },
+    {
+        "id_field": "s2_id",
+        "has_input": lambda p: bool(p.get("doi")),
+        "fn": lambda p, _e, s2_key, _n: s2.resolve_by_doi(p["doi"], api_key=s2_key),
+    },
+    {
+        "id_field": "s2_id",
+        "has_input": lambda p: bool(p.get("title")),
+        "fn": lambda p, _e, s2_key, _n: s2.resolve_by_title(p["title"], api_key=s2_key),
+    },
+    {
+        "id_field": "doi",
+        "has_input": lambda p: bool(p.get("doi")),
+        "fn": lambda p, email, _s2, _n: crossref.resolve_by_doi(p["doi"], mailto=email),
+    },
+    {
+        "id_field": "doi",
+        "has_input": lambda p: bool(p.get("title")),
+        "fn": lambda p, email, _s2, _n: crossref.resolve_by_title(p["title"], mailto=email),
+    },
+]
 
 
 def _fetch_citations(
@@ -266,12 +271,44 @@ def _update_paper_ids(db_path: Path, paper_id: int, resolved: dict) -> None:
 def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
     now = datetime.now(timezone.utc).isoformat()
     doi = _normalize_doi(citing.get("doi"))
+    openalex_id = citing.get("openalex_id")
+    s2_id = citing.get("s2_id")
+    pmid = citing.get("pmid")
     title = citing.get("title") or ""
+    year = citing.get("year")
 
     with sqlite3.connect(db_path) as conn:
         if doi:
             existing = conn.execute(
                 "SELECT id FROM papers WHERE doi = ?", (doi,)
+            ).fetchone()
+            if existing:
+                return existing[0]
+        if openalex_id:
+            existing = conn.execute(
+                "SELECT id FROM papers WHERE openalex_id = ?",
+                (openalex_id,),
+            ).fetchone()
+            if existing:
+                return existing[0]
+        if s2_id:
+            existing = conn.execute(
+                "SELECT id FROM papers WHERE s2_paper_id = ?",
+                (s2_id,),
+            ).fetchone()
+            if existing:
+                return existing[0]
+        if pmid:
+            existing = conn.execute(
+                "SELECT id FROM papers WHERE pmid = ?",
+                (pmid,),
+            ).fetchone()
+            if existing:
+                return existing[0]
+        if title and year is not None:
+            existing = conn.execute(
+                "SELECT id FROM papers WHERE canonical_title = ? AND year = ?",
+                (title, year),
             ).fetchone()
             if existing:
                 return existing[0]
@@ -288,12 +325,12 @@ def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
             (
                 f"paper-{uuid4()}",
                 title,
-                citing.get("year"),
+                year,
                 doi,
                 citing.get("arxiv_id"),
-                citing.get("openalex_id"),
-                citing.get("s2_id"),
-                citing.get("pmid"),
+                openalex_id,
+                s2_id,
+                pmid,
                 citing.get("pmcid"),
                 citing.get("publication_type"),
                 citing.get("journal"),

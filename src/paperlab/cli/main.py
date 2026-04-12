@@ -1,133 +1,138 @@
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
+import logging
+import sys
+
+import click
 
 from paperlab.cli import citations_cmd, doctor_cmd, export_cmd, init_cmd, ingest_cmd, summarize_cmd, qa_cmd
 
+log = logging.getLogger(__name__)
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="paperctl",
-        description="PaperLab: local paper library CLI",
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    stream=sys.stdout,
+)
+
+
+@click.group()
+def cli():
+    """PaperWeave (溯源文库): local-first paper library CLI"""
+
+
+@cli.command()
+@click.argument("root")
+def init(root):
+    """Initialize project"""
+    init_cmd.init_project(root)
+    log.info("Project initialized at %s", root)
+
+
+@cli.command()
+@click.argument("project_root")
+@click.argument("target")
+@click.option("--recursive", is_flag=True, help="Recursively scan folders")
+def ingest(project_root, target, recursive):
+    """Ingest PDFs"""
+    result = ingest_cmd.ingest_path(project_root, target, recursive=recursive)
+    log.info("Ingest complete")
+    log.info("- discovered: %s", result.discovered)
+    log.info("- registered: %s", result.registered)
+    log.info("- updated: %s", result.updated)
+    log.info("- skipped_duplicates: %s", result.skipped_duplicates)
+
+
+@cli.command()
+@click.argument("project_root")
+@click.option("--paper-ids", multiple=True, type=int, help="Specific paper IDs")
+@click.option("--changed", is_flag=True, help="Only changed or stale papers")
+@click.option("--all", "all_", is_flag=True, help="All parsed papers")
+@click.option("--force", is_flag=True, help="Force rerun for specified paper IDs")
+def summarize(project_root, paper_ids, changed, all_, force):
+    """Generate structured summaries"""
+    ids = list(paper_ids) if paper_ids else None
+    completed = summarize_cmd.summarize_path(
+        project_root,
+        paper_ids=ids,
+        changed=changed or not all_,
+        all_=all_,
+        force=force,
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    # init
-    p_init = subparsers.add_parser("init", help="Initialize project")
-    p_init.add_argument("root", help="Project root directory")
-
-    # ingest
-    p_ingest = subparsers.add_parser("ingest", help="Ingest PDFs")
-    p_ingest.add_argument("project_root", help="Project root directory")
-    p_ingest.add_argument("target", help="PDF file or folder to ingest")
-    p_ingest.add_argument("--recursive", action="store_true", help="Recursively scan folders")
-
-    # summarize
-    p_sum = subparsers.add_parser("summarize", help="Generate structured summaries")
-    p_sum.add_argument("project_root", help="Project root directory")
-    p_sum.add_argument("--paper-ids", nargs="+", type=int, help="Specific paper IDs")
-    p_sum.add_argument("--changed", action="store_true", help="Only changed or stale papers")
-    p_sum.add_argument("--all", action="store_true", help="All parsed papers")
-    p_sum.add_argument("--force", action="store_true", help="Force rerun for specified paper IDs")
-
-    # qa
-    p_qa = subparsers.add_parser("qa", help="Generate deep Q&A")
-    p_qa.add_argument("project_root", help="Project root directory")
-    p_qa.add_argument("--paper-ids", nargs="+", type=int, help="Specific paper IDs")
-    p_qa.add_argument("--changed", action="store_true", help="Only changed or stale papers")
-    p_qa.add_argument("--all", action="store_true", help="All parsed papers")
-    p_qa.add_argument("--force", action="store_true", help="Force rerun for specified paper IDs")
-
-    # citations
-    p_cit = subparsers.add_parser("citations", help="Citation tracking")
-    cit_sub = p_cit.add_subparsers(dest="cit_command", required=True)
-    p_fwd = cit_sub.add_parser("forward", help="Track forward citations")
-    p_fwd.add_argument("project_root", help="Project root directory")
-    p_fwd.add_argument("--paper-ids", nargs="+", type=int, help="Specific paper IDs")
-    p_fwd.add_argument("--year-start", type=int)
-    p_fwd.add_argument("--year-end", type=int)
-    p_fwd.add_argument("--max-results", type=int)
-
-    # export
-    p_exp = subparsers.add_parser("export", help="Export to Markdown")
-    exp_sub = p_exp.add_subparsers(dest="export_type", required=True)
-    p_exp_sum = exp_sub.add_parser("summary", help="Export summaries")
-    p_exp_sum.add_argument("project_root", help="Project root directory")
-    p_exp_qa = exp_sub.add_parser("qa", help="Export Q&A")
-    p_exp_qa.add_argument("project_root", help="Project root directory")
-
-    # doctor
-    p_doc = subparsers.add_parser("doctor", help="Validate project and environment health")
-    p_doc.add_argument("project_root", help="Project root directory")
-    p_doc.add_argument("--check-llm", action="store_true", help="Run a live minimal LLM connectivity check")
-
-    return parser
+    log.info("Summary complete: %d paper(s) processed", len(completed))
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+@cli.command()
+@click.argument("project_root")
+@click.option("--paper-ids", multiple=True, type=int, help="Specific paper IDs")
+@click.option("--changed", is_flag=True, help="Only changed or stale papers")
+@click.option("--all", "all_", is_flag=True, help="All parsed papers")
+@click.option("--force", is_flag=True, help="Force rerun for specified paper IDs")
+def qa(project_root, paper_ids, changed, all_, force):
+    """Generate deep Q&A"""
+    ids = list(paper_ids) if paper_ids else None
+    completed = qa_cmd.qa_path(
+        project_root,
+        paper_ids=ids,
+        changed=changed or not all_,
+        all_=all_,
+        force=force,
+    )
+    log.info("QA complete: %d paper(s) processed", len(completed))
 
-    if args.command == "init":
-        init_cmd.init_project(args.root)
-        print(f"Project initialized at {args.root}")
-        return 0
 
-    if args.command == "ingest":
-        result = ingest_cmd.ingest_path(args.project_root, args.target, recursive=args.recursive)
-        print(f"\nIngest complete")
-        print(f"- discovered: {result.discovered}")
-        print(f"- registered: {result.registered}")
-        print(f"- updated: {result.updated}")
-        print(f"- skipped_duplicates: {result.skipped_duplicates}")
-        return 0
+@cli.group()
+def citations():
+    """Citation tracking"""
 
-    if args.command == "summarize":
-        completed = summarize_cmd.summarize_path(
-            args.project_root,
-            paper_ids=args.paper_ids,
-            changed=args.changed or not args.all,
-            all_=args.all,
-            force=args.force,
-        )
-        print(f"\nSummary complete: {len(completed)} paper(s) processed")
-        return 0
 
-    if args.command == "qa":
-        completed = qa_cmd.qa_path(
-            args.project_root,
-            paper_ids=args.paper_ids,
-            changed=args.changed or not args.all,
-            all_=args.all,
-            force=args.force,
-        )
-        print(f"\nQA complete: {len(completed)} paper(s) processed")
-        return 0
+@citations.command("forward")
+@click.argument("project_root")
+@click.option("--paper-ids", multiple=True, type=int, help="Specific paper IDs")
+@click.option("--year-start", type=int)
+@click.option("--year-end", type=int)
+@click.option("--max-results", type=int)
+def citations_forward(project_root, paper_ids, year_start, year_end, max_results):
+    """Track forward citations"""
+    ids = list(paper_ids) if paper_ids else None
+    citing = citations_cmd.citations_forward_cmd(
+        project_root,
+        paper_ids=ids,
+        year_start=year_start,
+        year_end=year_end,
+        max_results=max_results,
+    )
+    log.info("Citation tracking complete: %d citing paper(s) found", len(citing))
 
-    if args.command == "citations":
-        if args.cit_command == "forward":
-            citing = citations_cmd.citations_forward_cmd(
-                args.project_root,
-                paper_ids=args.paper_ids,
-                year_start=args.year_start,
-                year_end=args.year_end,
-                max_results=args.max_results,
-            )
-            print(f"\nCitation tracking complete: {len(citing)} citing paper(s) found")
-        return 0
 
-    if args.command == "export":
-        if args.export_type == "summary":
-            export_cmd.export_summary_cmd(args.project_root)
-        elif args.export_type == "qa":
-            export_cmd.export_qa_cmd(args.project_root)
-        return 0
+@cli.group("export")
+def export_group():
+    """Export to Markdown"""
 
-    if args.command == "doctor":
-        report = doctor_cmd.run_doctor(args.project_root, check_llm=args.check_llm)
-        for key, value in report.items():
-            print(f"{key}: {value}")
-        return 0
 
-    return 1
+@export_group.command("summary")
+@click.argument("project_root")
+def export_summary(project_root):
+    """Export summaries"""
+    export_cmd.export_summary_cmd(project_root)
+
+
+@export_group.command("qa")
+@click.argument("project_root")
+def export_qa(project_root):
+    """Export Q&A"""
+    export_cmd.export_qa_cmd(project_root)
+
+
+@cli.command()
+@click.argument("project_root")
+@click.option("--check-llm", is_flag=True, help="Run a live minimal LLM connectivity check")
+def doctor(project_root, check_llm):
+    """Validate project and environment health"""
+    report = doctor_cmd.run_doctor(project_root, check_llm=check_llm)
+    for key, value in report.items():
+        log.info("%s: %s", key, value)
+
+
+def main():
+    cli()

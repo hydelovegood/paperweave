@@ -568,3 +568,44 @@ def test_track_forward_citations_falls_back_to_s2_when_openalex_fetch_fails(monk
         assert len(citing_ids) == 1
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_track_citations_deduplicates_without_doi_by_openalex_id(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        paper_id = _insert_classic_paper(db_path, doi="10.1234/classic")
+
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.openalex.resolve_by_doi",
+            lambda doi, mailto="": _sample_resolved(),
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.openalex.get_forward_citations",
+            lambda *args, **kwargs: [
+                {"openalex_id": "https://openalex.org/W99999", "title": "No DOI Paper", "year": 2024, "is_oa": False, "oa_url": None},
+                {"openalex_id": "https://openalex.org/W99999", "title": "No DOI Paper", "year": 2024, "is_oa": False, "oa_url": None},
+            ],
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.forward_citations.unpaywall.check_oa",
+            lambda doi, email: None,
+        )
+
+        citing_ids = track_forward_citations(project_root, paper_id)
+
+        assert len(citing_ids) == 2
+        assert citing_ids[0] == citing_ids[1]
+
+        with sqlite3.connect(db_path) as conn:
+            paper_count = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE openalex_id = 'https://openalex.org/W99999'"
+            ).fetchone()[0]
+        assert paper_count == 1
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)

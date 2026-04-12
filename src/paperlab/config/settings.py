@@ -72,10 +72,10 @@ class SecretSettings:
 
 @dataclass(frozen=True, slots=True)
 class PromptSettings:
-    summary_system: Path
-    summary_user: Path
-    qa_system: Path
-    qa_user: Path
+    summary_system: Path | None
+    summary_user: Path | None
+    qa_system: Path | None
+    qa_user: Path | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +91,12 @@ class PaperLabSettings:
     prompts: PromptSettings
 
 
-def load_settings(project_root: Path | str, config_path: Path | str | None = None) -> PaperLabSettings:
+def load_settings(
+    project_root: Path | str,
+    config_path: Path | str | None = None,
+    *,
+    require_prompts: bool = True,
+) -> PaperLabSettings:
     root = Path(project_root).expanduser().resolve()
     config_file = Path(config_path).expanduser().resolve() if config_path else root / DEFAULT_CONFIG_RELATIVE_PATH
     env_file = root / DEFAULT_ENV_RELATIVE_PATH
@@ -101,10 +106,10 @@ def load_settings(project_root: Path | str, config_path: Path | str | None = Non
     merged_env = {**env_data, **os.environ}
 
     prompts = PromptSettings(
-        summary_system=_require_prompt_file(root, "summary_system_v1.txt"),
-        summary_user=_require_prompt_file(root, "summary_user_v1.txt"),
-        qa_system=_require_prompt_file(root, "qa_system_v1.txt"),
-        qa_user=_require_prompt_file(root, "qa_user_v1.txt"),
+        summary_system=_load_prompt_file(root, "summary_system_v1.txt", required=require_prompts),
+        summary_user=_load_prompt_file(root, "summary_user_v1.txt", required=require_prompts),
+        qa_system=_load_prompt_file(root, "qa_system_v1.txt", required=require_prompts),
+        qa_user=_load_prompt_file(root, "qa_user_v1.txt", required=require_prompts),
     )
 
     return PaperLabSettings(
@@ -161,21 +166,16 @@ def _load_config_file(path: Path) -> dict[str, Any]:
 def _load_env_file(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
-
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
-    return values
+    from dotenv import dotenv_values
+    return {k: v for k, v in dotenv_values(path).items() if v is not None}
 
 
-def _require_prompt_file(root: Path, filename: str) -> Path:
+def _load_prompt_file(root: Path, filename: str, *, required: bool) -> Path | None:
     prompt_path = root / "configs" / "prompts" / filename
     if not prompt_path.exists():
-        raise FileNotFoundError(f"Missing required prompt file: {prompt_path}")
+        if required:
+            raise FileNotFoundError(f"Missing required prompt file: {prompt_path}")
+        return None
     return prompt_path.relative_to(root)
 
 

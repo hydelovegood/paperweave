@@ -171,6 +171,30 @@ def test_select_papers_for_qa_returns_eligible_papers():
         shutil.rmtree(project_root, ignore_errors=True)
 
 
+def test_select_papers_for_qa_includes_failed_with_done_parse():
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        now = "2026-04-10T00:00:00+00:00"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO papers (paper_uid, parse_status, qa_status, enrich_status, summary_status, graph_status, created_at, updated_at) "
+                "VALUES ('p-failed', 'done', 'failed', 'pending', 'pending', 'pending', ?, ?)",
+                (now, now),
+            )
+            conn.commit()
+
+        ids = select_papers_for_qa(db_path)
+        assert ids == [1]
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
 # --- End-to-end with mocked LLM ---
 
 def test_generate_qa_persists_items_to_db(monkeypatch):

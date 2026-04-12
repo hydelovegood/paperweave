@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from paperlab.export.qa_export import export_qa
 from paperlab.export.summary_export import export_summary
+from paperlab.cli.export_cmd import export_qa_cmd, export_summary_cmd
 
 
 def _write_project_files(project_root: Path) -> None:
@@ -350,5 +351,53 @@ def test_export_qa_uses_single_connection(monkeypatch):
         export_qa(db_path, output_path)
 
         assert connect_calls["count"] == 1
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_export_commands_work_when_prompt_files_are_missing():
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        _insert_paper_with_summary(db_path, "Paper A", "# Paper A")
+        _insert_paper_with_qa(db_path, "Paper B", [
+            {"type": "reviewer", "question": "Q1", "answer": "A1"},
+        ])
+
+        (project_root / "configs" / "prompts" / "summary_system_v1.txt").unlink()
+
+        assert export_summary_cmd(project_root) == 1
+        assert export_qa_cmd(project_root) == 1
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_export_qa_labels_biomedical_types():
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        _insert_paper_with_qa(db_path, "Bio Paper", [
+            {"type": "methodological", "question": "Q1", "answer": "A1"},
+            {"type": "clinical", "question": "Q2", "answer": "A2"},
+            {"type": "interview", "question": "Q3", "answer": "A3"},
+        ])
+
+        output_path = project_root / "data" / "exports" / "QA.md"
+        export_qa(db_path, output_path)
+        content = output_path.read_text(encoding="utf-8")
+
+        assert "方法学审查" in content
+        assert "临床适用性" in content
+        assert "面试深入" in content
     finally:
         shutil.rmtree(project_root, ignore_errors=True)

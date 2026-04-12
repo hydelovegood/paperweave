@@ -144,3 +144,58 @@ def test_changed_file_content_marks_parse_as_stale() -> None:
         assert parse_status_rows == [("stale",)]
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_ingest_works_when_prompt_files_are_missing() -> None:
+    project_root = _build_project_root()
+    target_dir = project_root / "imports"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    paper_path = target_dir / "paper.pdf"
+    paper_path.write_bytes(b"pdf")
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        from paperlab.cli.ingest_cmd import ingest_path
+
+        db_path = init_project(project_root)
+        assert db_path.exists()
+
+        (project_root / "configs" / "prompts" / "qa_system_v1.txt").unlink()
+        result = ingest_path(project_root, paper_path, recursive=False)
+
+        assert result.registered == 1
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_changed_file_to_existing_sha_is_deduplicated_without_integrity_error() -> None:
+    project_root = _build_project_root()
+    target_dir = project_root / "imports" / "dedupe"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    file_a = target_dir / "paper_a.pdf"
+    file_b = target_dir / "paper_b.pdf"
+    file_a.write_bytes(b"same-a")
+    file_b.write_bytes(b"same-b")
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        from paperlab.cli.ingest_cmd import ingest_path
+
+        db_path = init_project(project_root)
+        first = ingest_path(project_root, target_dir, recursive=False)
+        assert first.registered == 2
+
+        file_b.write_bytes(b"same-a")
+        second = ingest_path(project_root, file_b, recursive=False)
+
+        assert second.skipped_duplicates == 1
+
+        file_rows = _fetch_rows(db_path, "SELECT path, sha256 FROM files ORDER BY path")
+        paper_rows = _fetch_rows(db_path, "SELECT COUNT(*) FROM papers")
+
+        assert len(file_rows) == 1
+        assert file_rows[0][1] != "same-b"
+        assert paper_rows == [(1,)]
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)

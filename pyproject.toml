@@ -3,18 +3,22 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "paperlab"
-version = "0.1.0"
-description = "Local paper library workflow for structured summaries, Q&A, and citation tracking"
+name = "paperweave"
+version = "0.2.1"
+description = "PaperWeave (溯源文库): local-first paper library CLI for structured summaries, Q&A, and citation tracking"
 requires-python = ">=3.10"
 dependencies = [
     "openai>=1.0",
     "requests>=2.28",
     "PyMuPDF>=1.24",
     "deepxiv-sdk>=0.2.3",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "click>=8.0",
 ]
 
 [project.scripts]
+paperweave = "paperlab.cli.main:main"
 paperctl = "paperlab.cli.main:main"
 
 [tool.setuptools]

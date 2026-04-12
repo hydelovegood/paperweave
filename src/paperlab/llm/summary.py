@@ -7,6 +7,7 @@ from pathlib import Path
 
 from paperlab.config import load_settings
 from paperlab.llm.client import call_llm, extract_json_object
+from paperlab.llm.task_common import infer_prompt_version, write_llm_log
 from paperlab.storage.status import compute_summary_input_hash
 from paperlab.storage.task_runs import is_task_completed, record_task_run
 
@@ -62,16 +63,6 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
         system_prompt_path = root / settings.prompts.summary_system
         user_prompt_path = root / settings.prompts.summary_user
 
-    version = _infer_prompt_version(system_prompt_path, user_prompt_path)
-
-    input_hash = compute_summary_input_hash(
-        parsed_path, system_prompt_path, user_prompt_path, settings.llm.summary_model,
-    )
-    if _can_reuse_existing_summary(db_path, paper_id, input_hash):
-        return _load_existing_summary(db_path, paper_id)
-
-    started_at = datetime.now(timezone.utc).isoformat()
-
     system_prompt = system_prompt_path.read_text(encoding="utf-8")
     system_prompt = system_prompt.replace("{research_context}", settings.llm.research_context)
 
@@ -82,6 +73,16 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
     user_prompt = user_template.replace("{paper_title}", paper.get("title", ""))
     user_prompt = user_prompt.replace("{paper_abstract}", paper.get("abstract", ""))
     user_prompt = user_prompt.replace("{paper_sections}", sections_text)
+
+    version = infer_prompt_version(system_prompt_path, user_prompt_path)
+
+    input_hash = compute_summary_input_hash(
+        parsed_path, system_prompt, user_prompt, settings.llm.summary_model, settings.llm.lang,
+    )
+    if _can_reuse_existing_summary(db_path, paper_id, input_hash):
+        return _load_existing_summary(db_path, paper_id)
+
+    started_at = datetime.now(timezone.utc).isoformat()
 
     raw = ""
     log_path = None
@@ -95,7 +96,7 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
             max_retries=settings.llm.max_retries,
         )
 
-        log_path = _write_llm_log(root, "summary", paper_id, started_at, raw)
+        log_path = write_llm_log(root, "summary", paper_id, started_at, raw)
         summary = extract_json_object(raw)
         _validate_summary(summary)
 
@@ -160,7 +161,7 @@ def _can_reuse_existing_summary(db_path: Path, paper_id: int, input_hash: str) -
 
     if row is None:
         return False
-    if row[0] == "stale":
+    if row[0] in {"stale", "failed"}:
         return False
     return is_task_completed(db_path, "summary", str(paper_id), input_hash)
 
@@ -169,7 +170,7 @@ def select_papers_for_summary(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
     with sqlite3.connect(db) as conn:
         rows = conn.execute(
-            "SELECT id FROM papers WHERE summary_status IN ('pending', 'stale') AND parse_status = 'done' ORDER BY id"
+            "SELECT id FROM papers WHERE summary_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()
     return [row[0] for row in rows]
 
@@ -185,6 +186,32 @@ def _validate_summary(data: dict) -> None:
 
 
 def _build_summary_md(title: str, summary: dict) -> str:
+    if any(field in summary for field in REQUIRED_BIOMED_SUMMARY_FIELDS):
+        lines = [f"# {title}", ""]
+        for heading, key in [
+            ("研究问题", "study_question"),
+            ("研究设计", "study_design"),
+            ("受试者", "participants"),
+            ("干预措施", "intervention"),
+            ("对照", "comparator"),
+            ("主要终点", "primary_outcome"),
+            ("主要发现", "main_findings"),
+            ("局限与偏倚", "limitations_bias"),
+            ("临床意义", "clinical_relevance"),
+        ]:
+            lines.append(f"## {heading}")
+            lines.append(str(summary.get(key, "")))
+            lines.append("")
+
+        anchors = summary.get("evidence_anchors", [])
+        if anchors:
+            lines.append("## 证据锚点")
+            for anchor in anchors:
+                lines.append(f"- **{anchor.get('claim', '')}**: {anchor.get('quote', '')}")
+            lines.append("")
+
+        return "\n".join(lines)
+
     lines = [f"# {title}", ""]
 
     lines.append("## 核心问题")
@@ -238,20 +265,3 @@ def _build_summary_md(title: str, summary: dict) -> str:
         lines.append("")
 
     return "\n".join(lines)
-
-
-def _infer_prompt_version(*paths: Path) -> str:
-    for path in paths:
-        for part in path.stem.split("_"):
-            if part.startswith("v") and part[1:].isdigit():
-                return part
-    return "v1"
-
-
-def _write_llm_log(root: Path, task_name: str, paper_id: int, started_at: str, raw: str) -> str:
-    safe_stamp = started_at.replace(":", "-")
-    log_dir = root / "data" / "logs" / "llm"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"{task_name}_paper_{paper_id}_{safe_stamp}.txt"
-    log_path.write_text(raw, encoding="utf-8")
-    return str(log_path.relative_to(root))

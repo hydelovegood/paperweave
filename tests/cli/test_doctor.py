@@ -85,3 +85,42 @@ def test_dependency_status_only_treats_import_error_as_missing(monkeypatch):
     monkeypatch.setattr("builtins.__import__", fake_import)
     result = _dependency_status()
     assert result["deepxiv_sdk"] is False
+
+
+def test_doctor_reports_missing_config_without_crashing(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from paperlab.cli.doctor_cmd import run_doctor
+
+        monkeypatch.setattr("paperlab.cli.doctor_cmd._dependency_status", lambda: {"openai": True})
+
+        report = run_doctor(project_root, check_llm=False)
+
+        assert report["config"] is False
+        assert report["prompts"] is False
+        assert report["database"] is False
+        assert report["llm_check"] is None
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_doctor_reports_missing_prompts_without_crashing(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.doctor_cmd import run_doctor
+
+        (project_root / "configs" / "prompts" / "summary_system_v1.txt").unlink()
+        monkeypatch.setattr("paperlab.cli.doctor_cmd._dependency_status", lambda: {"openai": True})
+
+        report = run_doctor(project_root, check_llm=False)
+
+        assert report["config"] is True
+        assert report["prompts"] is False
+        assert report["database"] is False
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)

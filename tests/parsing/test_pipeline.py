@@ -207,7 +207,7 @@ def test_parse_and_persist_writes_sections_and_parsed_json(monkeypatch) -> None:
             ),
         )
         monkeypatch.setattr(
-            "paperlab.parsing.pipeline._pre_enrich_biomed_metadata",
+            "paperlab.enrich.biomed_pre_enrich.pre_enrich_biomed_metadata",
             lambda *args, **kwargs: None,
         )
 
@@ -279,6 +279,10 @@ def test_parse_and_persist_pre_enriches_biomed_metadata_and_uses_pmc(monkeypatch
 
         monkeypatch.setattr(
             "paperlab.parsing.pipeline.read_pdf_head_text",
+            lambda _path, max_pages=2: "Nature Medicine\nhttps://doi.org/10.1038/s41591-026-04247-3",
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.biomed_pre_enrich.read_pdf_head_text",
             lambda _path, max_pages=2: "Nature Medicine\nhttps://doi.org/10.1038/s41591-026-04247-3",
         )
         monkeypatch.setattr(
@@ -421,3 +425,67 @@ def test_parse_document_does_not_use_reference_arxiv_id_from_late_pages(monkeypa
     result = parse_document("dummy.pdf", deepxiv_token="token-123")
 
     assert result.source == "pymupdf"
+
+
+def test_parse_and_persist_continues_when_biomed_pre_enrich_lookup_fails(monkeypatch) -> None:
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        from paperlab.parsing.pipeline import parse_and_persist
+        import requests
+
+        db_path = init_project(project_root)
+        now = "2026-04-10T00:00:00+00:00"
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO papers (
+                    paper_uid,
+                    parse_status,
+                    enrich_status,
+                    summary_status,
+                    qa_status,
+                    graph_status,
+                    citation_status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, 'pending', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)
+                """,
+                ("paper-pre-enrich-fail", now, now),
+            )
+            paper_row_id = cursor.lastrowid
+            conn.commit()
+
+        monkeypatch.setattr(
+            "paperlab.enrich.biomed_pre_enrich.read_pdf_head_text",
+            lambda _path, max_pages=2: "Nature Medicine\n10.1038/test",
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.biomed_pre_enrich.extract_doi",
+            lambda text: "10.1038/test",
+        )
+        monkeypatch.setattr(
+            "paperlab.enrich.pubmed_client.resolve_by_doi",
+            lambda *args, **kwargs: (_ for _ in ()).throw(requests.RequestException("pubmed down")),
+        )
+        monkeypatch.setattr(
+            "paperlab.parsing.pipeline.parse_document",
+            lambda input_path, deepxiv_token=None: _sample_paper(source="pymupdf"),
+        )
+
+        canonical = parse_and_persist(project_root, paper_row_id, "anything.pdf")
+
+        assert canonical.source == "pymupdf"
+        with sqlite3.connect(db_path) as conn:
+            status = conn.execute(
+                "SELECT parse_status FROM papers WHERE id = ?",
+                (paper_row_id,),
+            ).fetchone()[0]
+        assert status == "done"
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)

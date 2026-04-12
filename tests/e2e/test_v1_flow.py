@@ -135,7 +135,7 @@ def test_v1_full_flow(monkeypatch):
             lambda *a, **kw: fake_paper,
         )
         monkeypatch.setattr(
-            "paperlab.parsing.pipeline._pre_enrich_biomed_metadata",
+            "paperlab.enrich.biomed_pre_enrich.pre_enrich_biomed_metadata",
             lambda *args, **kwargs: None,
         )
 

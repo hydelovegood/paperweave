@@ -1,27 +1,33 @@
 from __future__ import annotations
 
-import argparse
-from dataclasses import fields
+import logging
 from pathlib import Path
 
 from paperlab.config import load_settings
+from paperlab.config.settings import REQUIRED_PROMPT_FILES
+
+log = logging.getLogger(__name__)
 
 
 def run_doctor(project_root: Path | str, check_llm: bool = False) -> dict:
     root = Path(project_root).expanduser().resolve()
-    settings = load_settings(root)
-    db_path = (root / settings.database.path).resolve()
+    config_path = root / "configs" / "app.yaml"
+    prompts_ok = all((root / "configs" / "prompts" / filename).exists() for filename in REQUIRED_PROMPT_FILES)
 
     report = {
-        "config": (root / "configs" / "app.yaml").exists(),
-        "prompts": all(
-            (root / getattr(settings.prompts, field.name)).exists()
-            for field in fields(settings.prompts)
-        ),
-        "database": db_path.exists(),
+        "config": config_path.exists(),
+        "prompts": prompts_ok,
+        "database": False,
         "dependencies": _dependency_status(),
         "llm_check": None,
     }
+
+    if not report["config"]:
+        return report
+
+    settings = load_settings(root, require_prompts=False)
+    db_path = (root / settings.database.path).resolve()
+    report["database"] = db_path.exists()
 
     if check_llm:
         from paperlab.llm.client import call_llm, extract_json_object
@@ -48,19 +54,3 @@ def _dependency_status() -> dict[str, bool]:
         except ImportError:
             results[module_name] = False
     return results
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="paperctl-doctor")
-    parser.add_argument("project_root")
-    parser.add_argument("--check-llm", action="store_true")
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    report = run_doctor(args.project_root, check_llm=args.check_llm)
-    for key, value in report.items():
-        print(f"{key}: {value}")
-    return 0

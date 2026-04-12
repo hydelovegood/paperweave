@@ -8,6 +8,8 @@ QA_TYPE_LABELS = {
     "reviewer": "审稿人视角",
     "interview": "面试深入",
     "author_defense": "作者答辩",
+    "methodological": "方法学审查",
+    "clinical": "临床适用性",
 }
 
 

@@ -221,6 +221,30 @@ def test_select_papers_for_summary_returns_pending_with_done_parse():
         shutil.rmtree(project_root, ignore_errors=True)
 
 
+def test_select_papers_for_summary_includes_failed_with_done_parse():
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        now = "2026-04-10T00:00:00+00:00"
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                "INSERT INTO papers (paper_uid, parse_status, summary_status, enrich_status, qa_status, graph_status, created_at, updated_at) "
+                "VALUES ('p-failed', 'done', 'failed', 'pending', 'pending', 'pending', ?, ?)",
+                (now, now),
+            )
+            conn.commit()
+
+        ids = select_papers_for_summary(db_path)
+        assert ids == [1]
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
 # --- End-to-end with mocked LLM ---
 
 def test_summarize_paper_persists_to_db(monkeypatch):
@@ -310,3 +334,89 @@ def test_summarize_paper_records_failed_task_run(monkeypatch):
         assert task == "failed"
     finally:
         shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_summarize_paper_recomputes_when_research_context_changes(monkeypatch):
+    project_root = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
+    project_root.mkdir(parents=True, exist_ok=True)
+    _write_project_files(project_root)
+
+    try:
+        from paperlab.cli.init_cmd import init_project
+        db_path = init_project(project_root)
+
+        now = "2026-04-10T00:00:00+00:00"
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.execute(
+                "INSERT INTO papers (paper_uid, parse_status, summary_status, enrich_status, qa_status, graph_status, citation_status, created_at, updated_at) "
+                "VALUES ('p-context', 'done', 'pending', 'pending', 'pending', 'pending', 'pending', ?, ?)",
+                (now, now),
+            )
+            paper_id = cursor.lastrowid
+            conn.commit()
+
+        _setup_parsed_paper(project_root, paper_id)
+        settings_path = project_root / "configs" / "app.yaml"
+        original = settings_path.read_text(encoding="utf-8")
+        (project_root / "configs" / "prompts" / "summary_system_v1.txt").write_text(
+            "system {research_context}",
+            encoding="utf-8",
+        )
+
+        calls: list[str] = []
+
+        def fake_call_llm(**kwargs):
+            calls.append(kwargs["system_prompt"])
+            return json.dumps({
+                "problem": kwargs["system_prompt"],
+                "main_contributions": [],
+                "core_innovations": [],
+                "method_summary": "m",
+                "experiment_summary": "e",
+                "limitations": [],
+                "key_takeaways": [],
+                "relation_to_user_research": "r",
+                "evidence": [],
+            })
+
+        monkeypatch.setattr("paperlab.llm.summary.call_llm", fake_call_llm)
+
+        first = summarize_paper(project_root, paper_id)
+        settings_path.write_text(
+            original.replace(
+                "research_context: multi-agent reinforcement learning",
+                "research_context: causal inference",
+            ),
+            encoding="utf-8",
+        )
+        second = summarize_paper(project_root, paper_id)
+
+        assert len(calls) == 2
+        assert first["problem"] != second["problem"]
+    finally:
+        shutil.rmtree(project_root, ignore_errors=True)
+
+
+def test_build_summary_md_supports_biomedical_schema():
+    biomed_summary = {
+        "study_question": "Does treatment X reduce blood pressure?",
+        "study_design": "Randomized controlled trial",
+        "participants": "120 adults",
+        "intervention": "Treatment X",
+        "comparator": "Placebo",
+        "primary_outcome": "Systolic blood pressure at 12 weeks",
+        "main_findings": "Treatment X lowered blood pressure by 8 mmHg.",
+        "limitations_bias": "Single-center study",
+        "clinical_relevance": "Useful for moderate hypertension",
+        "evidence_anchors": [{"claim": "BP reduction", "quote": "Results paragraph 2"}],
+    }
+
+    md = _build_summary_md("Bio Paper", biomed_summary)
+
+    assert "# Bio Paper" in md
+    assert "## 研究问题" in md
+    assert "Does treatment X reduce blood pressure?" in md
+    assert "## 主要发现" in md
+    assert "Treatment X lowered blood pressure by 8 mmHg." in md
+    assert "## 证据锚点" in md
+    assert "BP reduction" in md

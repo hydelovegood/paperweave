@@ -3,6 +3,19 @@ from __future__ import annotations
 import json
 import re
 
+_client_cache: dict[str, object] = {}
+
+
+def _get_client(api_key: str, base_url: str, max_retries: int = 2):
+    from openai import OpenAI
+
+    cache_key = f"{api_key}:{base_url}:{max_retries}"
+    client = _client_cache.get(cache_key)
+    if client is None:
+        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries)
+        _client_cache[cache_key] = client
+    return client
+
 
 def call_llm(
     api_key: str,
@@ -19,9 +32,7 @@ def call_llm(
     if not model or not model.strip():
         raise ValueError("Missing model for LLM request")
 
-    from openai import OpenAI
-
-    client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries)
+    client = _get_client(api_key, base_url, max_retries)
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -50,9 +61,12 @@ def extract_json_object(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    start = stripped.index("{")
-    end = stripped.rindex("}") + 1
-    return _safe_json_loads(stripped[start:end])
+    try:
+        start = stripped.index("{")
+        end = stripped.rindex("}") + 1
+        return _safe_json_loads(stripped[start:end])
+    except (ValueError, json.JSONDecodeError) as e:
+        raise ValueError(f"LLM output is not valid JSON (object): {e}") from e
 
 
 def extract_json_array(text: str) -> list:
@@ -73,9 +87,12 @@ def extract_json_array(text: str) -> list:
         except json.JSONDecodeError:
             pass
 
-    start = stripped.index("[")
-    end = stripped.rindex("]") + 1
-    return _safe_json_loads(stripped[start:end])
+    try:
+        start = stripped.index("[")
+        end = stripped.rindex("]") + 1
+        return _safe_json_loads(stripped[start:end])
+    except (ValueError, json.JSONDecodeError) as e:
+        raise ValueError(f"LLM output is not valid JSON (array): {e}") from e
 
 
 def _safe_json_loads(text: str):

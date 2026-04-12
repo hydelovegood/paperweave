@@ -12,32 +12,36 @@ def compute_parse_input_hash(file_sha256: str) -> str:
 
 def compute_summary_input_hash(
     parsed_json_path: Path,
-    system_prompt_path: Path,
-    user_prompt_path: Path,
+    system_prompt: Path | str,
+    user_prompt: Path | str,
     model: str,
+    lang: str = "",
 ) -> str:
     parts = [
         "summary",
         sha256_file(parsed_json_path),
-        sha256_file(system_prompt_path),
-        sha256_file(user_prompt_path),
+        _hash_value(system_prompt),
+        _hash_value(user_prompt),
         model,
+        lang,
     ]
     return hashlib.sha256(":".join(parts).encode()).hexdigest()[:16]
 
 
 def compute_qa_input_hash(
     parsed_json_path: Path,
-    system_prompt_path: Path,
-    user_prompt_path: Path,
+    system_prompt: Path | str,
+    user_prompt: Path | str,
     model: str,
+    lang: str = "",
 ) -> str:
     parts = [
         "qa",
         sha256_file(parsed_json_path),
-        sha256_file(system_prompt_path),
-        sha256_file(user_prompt_path),
+        _hash_value(system_prompt),
+        _hash_value(user_prompt),
         model,
+        lang,
     ]
     return hashlib.sha256(":".join(parts).encode()).hexdigest()[:16]
 
@@ -87,3 +91,9 @@ def mark_downstream_stale(db_path: Path | str, paper_id: int) -> None:
             (now, paper_id),
         )
         conn.commit()
+
+
+def _hash_value(value: Path | str) -> str:
+    if isinstance(value, Path):
+        return sha256_file(value)
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]

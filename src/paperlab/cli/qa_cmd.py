@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import argparse
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +11,8 @@ from openai import APIConnectionError, APIError, APITimeoutError
 
 from paperlab.config import load_settings
 from paperlab.llm.qa import generate_qa, select_papers_for_qa
+
+log = logging.getLogger(__name__)
 
 
 def qa_path(
@@ -37,7 +39,7 @@ def qa_path(
     else:
         target_ids = []
     if not target_ids:
-        print("No papers for QA generation.")
+        log.info("No papers for QA generation.")
         return []
 
     completed = []
@@ -45,9 +47,9 @@ def qa_path(
         try:
             generate_qa(root, pid)
             completed.append(pid)
-            print(f"Generated QA for paper {pid}")
+            log.info("Generated QA for paper %d", pid)
         except (FileNotFoundError, ValueError, json.JSONDecodeError, APIError, APIConnectionError, APITimeoutError, requests.RequestException) as exc:
-            print(f"Failed to generate QA for paper {pid}: {exc}")
+            log.warning("Failed to generate QA for paper %d: %s", pid, exc)
     return completed
 
 
@@ -68,27 +70,3 @@ def _select_all_parsed(db_path: Path) -> list[int]:
             "SELECT id FROM papers WHERE parse_status = 'done' ORDER BY id"
         ).fetchall()
     return [row[0] for row in rows]
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="paperctl-qa")
-    parser.add_argument("project_root")
-    parser.add_argument("--paper-ids", nargs="+", type=int)
-    parser.add_argument("--changed", action="store_true")
-    parser.add_argument("--all", action="store_true")
-    parser.add_argument("--force", action="store_true")
-    return parser
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    completed = qa_path(
-        args.project_root,
-        paper_ids=args.paper_ids,
-        changed=args.changed or not args.all,
-        all_=args.all,
-        force=args.force,
-    )
-    print(f"\nQA complete: {len(completed)} paper(s) processed")
-    return 0
