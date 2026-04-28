@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from paperlab.cli import citations_cmd, doctor_cmd, export_cmd, init_cmd, ingest_cmd, summarize_cmd, qa_cmd
+from paperlab.cli import citations_cmd, doctor_cmd, export_cmd, init_cmd, ingest_cmd, parse_cmd, qa_cmd, run_cmd, summarize_cmd
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,58 @@ def ingest(project_root, target, recursive):
     log.info("- registered: %s", result.registered)
     log.info("- updated: %s", result.updated)
     log.info("- skipped_duplicates: %s", result.skipped_duplicates)
+
+
+@cli.command()
+@click.argument("project_root")
+@click.option("--paper-ids", multiple=True, type=int, help="Specific paper IDs")
+@click.option("--changed", is_flag=True, help="Only changed or stale papers")
+@click.option("--all", "all_", is_flag=True, help="All registered papers")
+@click.option("--force", is_flag=True, help="Force rerun for specified paper IDs")
+@click.option("--fail-fast", is_flag=True, help="Stop on first failed paper")
+def parse(project_root, paper_ids, changed, all_, force, fail_fast):
+    """Parse registered PDFs"""
+    ids = list(paper_ids) if paper_ids else None
+    result = parse_cmd.parse_path(
+        project_root,
+        paper_ids=ids,
+        changed=changed or not all_,
+        all_=all_,
+        force=force,
+        fail_fast=fail_fast,
+    )
+    log.info("Parse complete")
+    log.info("- parsed: %s", len(result.completed))
+    log.info("- failed: %s", len(result.failed))
+
+
+@cli.command()
+@click.argument("project_root")
+@click.argument("target")
+@click.option("--recursive", is_flag=True, help="Recursively scan folders")
+@click.option("--all", "all_", is_flag=True, help="Process all registered papers")
+@click.option("--force", is_flag=True, help="Force rerun changed stages")
+@click.option("--fail-fast", is_flag=True, help="Stop on first failed paper")
+def run(project_root, target, recursive, all_, force, fail_fast):
+    """Run ingest, parse, summary, QA, and exports"""
+    result = run_cmd.run_path(
+        project_root,
+        target,
+        recursive=recursive,
+        all_=all_,
+        force=force,
+        fail_fast=fail_fast,
+    )
+    log.info("Run complete")
+    log.info("- discovered: %s", result.ingest.discovered)
+    log.info("- registered: %s", result.ingest.registered)
+    log.info("- updated: %s", result.ingest.updated)
+    log.info("- parsed: %s", len(result.parse.completed))
+    log.info("- parse_failed: %s", len(result.parse.failed))
+    log.info("- summarized: %s", len(result.summarized))
+    log.info("- qa: %s", len(result.qa))
+    log.info("- summary_exports: %s", result.summary_exports)
+    log.info("- qa_exports: %s", result.qa_exports)
 
 
 @cli.command()

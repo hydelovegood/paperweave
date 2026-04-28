@@ -22,13 +22,11 @@ def qa_path(
     changed: bool = True,
     all_: bool = False,
     force: bool = False,
+    fail_fast: bool = False,
 ) -> list[int]:
     root = Path(project_root).expanduser().resolve()
     settings = load_settings(root)
     db_path = (root / settings.database.path).resolve()
-
-    if paper_ids and force:
-        _mark_pending(db_path, paper_ids)
 
     if paper_ids:
         target_ids = paper_ids
@@ -38,6 +36,8 @@ def qa_path(
         target_ids = select_papers_for_qa(db_path)
     else:
         target_ids = []
+    if force and target_ids:
+        _mark_pending(db_path, target_ids)
     if not target_ids:
         log.info("No papers for QA generation.")
         return []
@@ -50,6 +50,8 @@ def qa_path(
             log.info("Generated QA for paper %d", pid)
         except (FileNotFoundError, ValueError, json.JSONDecodeError, APIError, APIConnectionError, APITimeoutError, requests.RequestException) as exc:
             log.warning("Failed to generate QA for paper %d: %s", pid, exc)
+            if fail_fast:
+                raise
     return completed
 
 

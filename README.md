@@ -43,15 +43,11 @@ PaperWeave 虽然是一个命令行工具，但**不要求你会写代码**。
    - `C:\papers\my-study`
 2. 把你想分析的 PDF 放进去
 3. 配好 `.env`
-4. 依次运行下面这些命令：
+4. 运行一条完整工作流命令：
 
 ```bash
 paperweave init C:\research\paperweave
-paperweave ingest C:\research\paperweave C:\papers\my-study
-paperweave summarize C:\research\paperweave --changed
-paperweave qa C:\research\paperweave --changed
-paperweave export summary C:\research\paperweave
-paperweave export qa C:\research\paperweave
+paperweave run C:\research\paperweave C:\papers\my-study
 ```
 
 运行完成后，你最值得先看的文件是：
@@ -64,7 +60,7 @@ paperweave export qa C:\research\paperweave
 ```bash
 paperweave init C:\research\paperweave
 paperweave ingest C:\research\paperweave C:\papers\my-study
-paperweave summarize C:\research\paperweave --changed
+paperweave parse C:\research\paperweave --changed
 ```
 
 ## 适合谁
@@ -337,7 +333,21 @@ Recursive:
 paperweave ingest C:\research\paperweave C:\papers --recursive
 ```
 
-### 3. Generate Summaries
+### 3. Parse Papers
+
+Changed, pending, or failed papers:
+
+```bash
+paperweave parse C:\research\paperweave --changed
+```
+
+All registered papers:
+
+```bash
+paperweave parse C:\research\paperweave --all
+```
+
+### 4. Generate Summaries
 
 Changed or stale papers:
 
@@ -363,7 +373,7 @@ Force rerun:
 paperweave summarize C:\research\paperweave --paper-ids 1 2 3 --force
 ```
 
-### 4. Generate QA
+### 5. Generate QA
 
 ```bash
 paperweave qa C:\research\paperweave --changed
@@ -381,7 +391,7 @@ Force rerun:
 paperweave qa C:\research\paperweave --paper-ids 1 2 3 --force
 ```
 
-### 5. Track Forward Citations
+### 6. Track Forward Citations
 
 ```bash
 paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
@@ -393,14 +403,28 @@ Limit result count:
 paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026 --max-results 20
 ```
 
-### 6. Export Results
+### 7. Export Results
 
 ```bash
 paperweave export summary C:\research\paperweave
 paperweave export qa C:\research\paperweave
 ```
 
-### 7. Run Diagnostics
+### 8. Run the Default Workflow
+
+The default workflow runs ingest, parse, summary, QA, and Markdown exports.
+
+```bash
+paperweave run C:\research\paperweave C:\papers --recursive
+```
+
+For debugging, stop at the first failed paper:
+
+```bash
+paperweave run C:\research\paperweave C:\papers --recursive --fail-fast
+```
+
+### 9. Run Diagnostics
 
 ```bash
 paperweave doctor C:\research\paperweave
@@ -414,11 +438,19 @@ paperweave doctor C:\research\paperweave --check-llm
 ```bash
 paperweave init C:\research\paperweave
 paperweave ingest C:\research\paperweave C:\papers --recursive
+paperweave parse C:\research\paperweave --changed
 paperweave summarize C:\research\paperweave --changed
 paperweave qa C:\research\paperweave --changed
 paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026
 paperweave export summary C:\research\paperweave
 paperweave export qa C:\research\paperweave
+```
+
+Or use the default workflow:
+
+```bash
+paperweave init C:\research\paperweave
+paperweave run C:\research\paperweave C:\papers --recursive
 ```
 
 ---
