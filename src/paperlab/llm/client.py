@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -9,7 +10,8 @@ _client_cache: dict[str, object] = {}
 def _get_client(api_key: str, base_url: str, max_retries: int = 2):
     from openai import OpenAI
 
-    cache_key = f"{api_key}:{base_url}:{max_retries}"
+    key_fingerprint = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    cache_key = f"{key_fingerprint}:{base_url}:{max_retries}"
     client = _client_cache.get(cache_key)
     if client is None:
         client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries)
