@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import shutil
 import sqlite3
 from pathlib import Path
 from uuid import uuid4
 
+from paperlab.cli.export_cmd import export_qa_cmd, export_summary_cmd
 from paperlab.export.qa_export import export_qa
 from paperlab.export.summary_export import export_summary
-from paperlab.cli.export_cmd import export_qa_cmd, export_summary_cmd
 
 
 def _write_project_files(project_root: Path) -> None:
@@ -162,8 +161,8 @@ def test_export_summary_outputs_deterministic_order():
         from paperlab.cli.init_cmd import init_project
         db_path = init_project(project_root)
 
-        id_b = _insert_paper_with_summary(db_path, "Paper B", "# B")
-        id_a = _insert_paper_with_summary(db_path, "Paper A", "# A")
+        _insert_paper_with_summary(db_path, "Paper B", "# B")
+        _insert_paper_with_summary(db_path, "Paper A", "# A")
 
         output_path = project_root / "data" / "exports" / "summary.md"
         export_summary(db_path, output_path)
@@ -343,7 +342,7 @@ def test_export_qa_uses_single_connection(monkeypatch):
             {"type": "reviewer", "question": "Q2", "answer": "A2"},
         ])
 
-        monkeypatch.setattr("paperlab.export.qa_export.sqlite3.connect", counting_connect)
+        monkeypatch.setattr("paperlab.storage.db.sqlite3.connect", counting_connect)
         output_path = project_root / "data" / "exports" / "QA.md"
         export_qa(db_path, output_path)
 

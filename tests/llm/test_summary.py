@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from paperlab.llm.client import extract_json_object, extract_json_array
+from paperlab.llm.client import extract_json_array, extract_json_object
 from paperlab.llm.summary import (
     _build_summary_md,
     _validate_summary,

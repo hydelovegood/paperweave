@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from paperlab.config import load_settings
 from paperlab.llm.client import call_llm, extract_json_object
 from paperlab.llm.task_common import infer_prompt_version, write_llm_log
+from paperlab.storage.db import db_connection
 from paperlab.storage.status import compute_summary_input_hash
 from paperlab.storage.task_runs import is_task_completed, record_task_run
-
 
 REQUIRED_SUMMARY_FIELDS = (
     "problem",
@@ -106,7 +105,7 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
 
         ended_at = datetime.now(timezone.utc).isoformat()
         now = ended_at
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute(
                 """
                 INSERT INTO summaries (paper_id, version, lang, model_name, summary_json, summary_md, evidence_json, created_at)
@@ -128,7 +127,7 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
         return summary
     except Exception:
         ended_at = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute(
                 "UPDATE papers SET summary_status = 'failed', updated_at = ? WHERE id = ?",
                 (ended_at, paper_id),
@@ -142,7 +141,7 @@ def summarize_paper(project_root: Path | str, paper_id: int) -> dict:
 
 
 def _load_existing_summary(db_path: Path, paper_id: int) -> dict:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT summary_json FROM summaries WHERE paper_id = ? ORDER BY id DESC LIMIT 1",
             (paper_id,),
@@ -153,7 +152,7 @@ def _load_existing_summary(db_path: Path, paper_id: int) -> dict:
 
 
 def _can_reuse_existing_summary(db_path: Path, paper_id: int, input_hash: str) -> bool:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT summary_status FROM papers WHERE id = ?",
             (paper_id,),
@@ -168,7 +167,7 @@ def _can_reuse_existing_summary(db_path: Path, paper_id: int, input_hash: str) -
 
 def select_papers_for_summary(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
-    with sqlite3.connect(db) as conn:
+    with db_connection(db) as conn:
         rows = conn.execute(
             "SELECT id FROM papers WHERE summary_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()

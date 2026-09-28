@@ -5,7 +5,6 @@ from pathlib import Path
 from paperlab.config import load_settings
 from paperlab.storage.db import initialize_database
 
-
 DEFAULT_CONFIG_TEXT = """database:
   path: db/papers.db
 

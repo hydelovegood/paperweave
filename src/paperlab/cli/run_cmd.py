@@ -29,6 +29,7 @@ def run_path(
     all_: bool = False,
     force: bool = False,
     fail_fast: bool = False,
+    concurrency: int = 1,
 ) -> RunResult:
     process_all = all_ or force
     ingest_result = ingest_path(project_root, target, recursive=recursive)
@@ -45,6 +46,7 @@ def run_path(
         all_=process_all,
         force=force,
         fail_fast=fail_fast,
+        concurrency=concurrency,
     )
     qa_completed = qa_path(
         project_root,
@@ -52,6 +54,7 @@ def run_path(
         all_=process_all,
         force=force,
         fail_fast=fail_fast,
+        concurrency=concurrency,
     )
     summary_exports = export_summary_cmd(project_root)
     qa_exports = export_qa_cmd(project_root)

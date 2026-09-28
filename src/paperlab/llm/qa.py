@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from paperlab.config import load_settings
 from paperlab.llm.client import call_llm, extract_json_array
 from paperlab.llm.task_common import infer_prompt_version, write_llm_log
+from paperlab.storage.db import db_connection
 from paperlab.storage.status import compute_qa_input_hash
 from paperlab.storage.task_runs import is_task_completed, record_task_run
-
 
 QA_TYPES = ("reviewer", "interview", "author_defense")
 BIOMED_QA_TYPES = ("methodological", "clinical", "interview")
@@ -82,7 +81,7 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
 
         ended_at = datetime.now(timezone.utc).isoformat()
         now = ended_at
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute("DELETE FROM qa_items WHERE paper_id = ?", (paper_id,))
             for item in qa_items:
                 conn.execute(
@@ -117,7 +116,7 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
         return qa_items
     except Exception:
         ended_at = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute(
                 "UPDATE papers SET qa_status = 'failed', updated_at = ? WHERE id = ?",
                 (ended_at, paper_id),
@@ -131,7 +130,7 @@ def generate_qa(project_root: Path | str, paper_id: int) -> list[dict]:
 
 
 def _load_existing_qa(db_path: Path, paper_id: int) -> list[dict]:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         rows = conn.execute(
             "SELECT qa_type, category, depth_level, question, answer_text, answer_mode, evidence_json FROM qa_items WHERE paper_id = ? ORDER BY id",
             (paper_id,),
@@ -151,7 +150,7 @@ def _load_existing_qa(db_path: Path, paper_id: int) -> list[dict]:
 
 
 def _can_reuse_existing_qa(db_path: Path, paper_id: int, input_hash: str) -> bool:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT qa_status FROM papers WHERE id = ?",
             (paper_id,),
@@ -166,7 +165,7 @@ def _can_reuse_existing_qa(db_path: Path, paper_id: int, input_hash: str) -> boo
 
 def select_papers_for_qa(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
-    with sqlite3.connect(db) as conn:
+    with db_connection(db) as conn:
         rows = conn.execute(
             "SELECT id FROM papers WHERE qa_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()

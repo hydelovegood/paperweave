@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 from typing import Any
 
 import yaml
-
 
 DEFAULT_CONFIG_RELATIVE_PATH = Path("configs/app.yaml")
 DEFAULT_ENV_RELATIVE_PATH = Path(".env")

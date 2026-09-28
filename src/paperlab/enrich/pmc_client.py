@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import xml.etree.ElementTree as ET
 from uuid import uuid4
 
@@ -72,10 +73,8 @@ def _extract_meta(article: ET.Element) -> dict:
 
     year_el = article.find(".//pub-date/year")
     if year_el is not None and year_el.text:
-        try:
+        with contextlib.suppress(ValueError):
             result["year"] = int(year_el.text)
-        except ValueError:
-            pass
 
     for article_id in article.findall(".//article-id"):
         id_type = article_id.get("pub-id-type", "")

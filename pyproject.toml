@@ -17,6 +17,12 @@ dependencies = [
     "click>=8.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
 [project.scripts]
 paperweave = "paperlab.cli.main:main"
 paperctl = "paperlab.cli.main:main"
@@ -29,3 +35,14 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "W"]
+ignore = [
+    "E501",   # line length handled by line-length above, not enforced as error
+]

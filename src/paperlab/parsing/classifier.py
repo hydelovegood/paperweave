@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 _BIOMED_JOURNAL_KEYWORDS = (
     "med", "clin", "lancet", "nejm", "bmj", "jama", "nature med",
     "bioeng", "biomed", "pharmacol", "oncology", "cardiol", "neurol",

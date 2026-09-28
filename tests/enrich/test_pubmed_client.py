@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperlab.enrich.pubmed_client import _parse_pubmed_xml, _parse_batch_xml
+from paperlab.enrich.pubmed_client import _parse_batch_xml, _parse_pubmed_xml
 
 
 def test_parse_pubmed_xml_extracts_fields():

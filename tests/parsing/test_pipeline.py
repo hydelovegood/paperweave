@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import shutil
+import sqlite3
 import sys
 import types
 from pathlib import Path
@@ -430,9 +430,10 @@ def test_parse_and_persist_continues_when_biomed_pre_enrich_lookup_fails(monkeyp
     _write_project_files(project_root)
 
     try:
+        import requests
+
         from paperlab.cli.init_cmd import init_project
         from paperlab.parsing.pipeline import parse_and_persist
-        import requests
 
         db_path = init_project(project_root)
         now = "2026-04-10T00:00:00+00:00"

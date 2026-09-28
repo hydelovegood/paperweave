@@ -18,7 +18,7 @@ def test_get_json_retries_on_429(monkeypatch):
         calls.append(1)
         return responses.pop(0)
 
-    monkeypatch.setattr("paperlab.enrich.http.requests.get", fake_get)
+    monkeypatch.setattr("paperlab.enrich.http.requests.Session.get", fake_get)
 
     response = get_json("https://example.com")
 
@@ -36,7 +36,7 @@ def test_get_json_retries_on_5xx(monkeypatch):
         calls.append(1)
         return responses.pop(0)
 
-    monkeypatch.setattr("paperlab.enrich.http.requests.get", fake_get)
+    monkeypatch.setattr("paperlab.enrich.http.requests.Session.get", fake_get)
 
     response = get_json("https://example.com")
 
