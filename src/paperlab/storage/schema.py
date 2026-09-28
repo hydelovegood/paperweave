@@ -3,19 +3,6 @@ from __future__ import annotations
 import sqlite3
 
 
-CORE_TABLE_NAMES = (
-    "files",
-    "papers",
-    "paper_files",
-    "sections",
-    "summaries",
-    "qa_items",
-    "citation_edges",
-    "external_links",
-    "task_runs",
-)
-
-
 SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS files (
