@@ -32,12 +32,6 @@ class PathsSettings:
 
 
 @dataclass(frozen=True, slots=True)
-class ParsingSettings:
-    prefer_deepxiv_for_arxiv: bool
-    pymupdf_section_split: bool
-
-
-@dataclass(frozen=True, slots=True)
 class LLMSettings:
     base_url: str
     summary_model: str
@@ -83,7 +77,6 @@ class PaperLabSettings:
     root_dir: Path
     database: DatabaseSettings
     paths: PathsSettings
-    parsing: ParsingSettings
     llm: LLMSettings
     citations: CitationSettings
     export: ExportSettings
@@ -120,10 +113,6 @@ def load_settings(
             cache_dir=_as_path(config_data["paths"]["cache_dir"]),
             export_dir=_as_path(config_data["paths"]["export_dir"]),
             logs_dir=_as_path(config_data["paths"]["logs_dir"]),
-        ),
-        parsing=ParsingSettings(
-            prefer_deepxiv_for_arxiv=_as_bool(config_data["parsing"]["prefer_deepxiv_for_arxiv"]),
-            pymupdf_section_split=_as_bool(config_data["parsing"]["pymupdf_section_split"]),
         ),
         llm=LLMSettings(
             base_url=str(config_data["llm"].get("base_url", "https://open.bigmodel.cn/api/coding/paas/v4")),
