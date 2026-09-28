@@ -8,10 +8,8 @@ from uuid import uuid4
 
 from paperlab.storage.status import (
     compute_citations_input_hash,
-    compute_parse_input_hash,
     compute_qa_input_hash,
     compute_summary_input_hash,
-    mark_downstream_stale,
 )
 from paperlab.storage.task_runs import is_task_completed, record_task_run
 
@@ -59,19 +57,6 @@ def _write_project_files(project_root: Path) -> None:
 
 
 # --- Input hash tests ---
-
-def test_parse_hash_is_consistent_for_same_input():
-    h1 = compute_parse_input_hash("abc123")
-    h2 = compute_parse_input_hash("abc123")
-    assert h1 == h2
-    assert len(h1) == 16
-
-
-def test_parse_hash_differs_for_different_input():
-    h1 = compute_parse_input_hash("abc123")
-    h2 = compute_parse_input_hash("def456")
-    assert h1 != h2
-
 
 def test_summary_hash_differs_when_model_changes():
     tmp = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
@@ -167,40 +152,6 @@ def test_record_and_check_task_run():
         assert is_task_completed(db_path, "summary", "1", "hash123")
         assert not is_task_completed(db_path, "summary", "1", "different_hash")
         assert not is_task_completed(db_path, "qa", "1", "hash123")
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
-# --- Cascade staleness test ---
-
-def test_mark_downstream_stale_sets_all_statuses():
-    tmp = Path(__file__).resolve().parent / ".tmp" / str(uuid4())
-    tmp.mkdir(parents=True, exist_ok=True)
-    _write_project_files(tmp)
-
-    try:
-        from paperlab.cli.init_cmd import init_project
-        db_path = init_project(tmp)
-
-        now = "2026-04-10T00:00:00+00:00"
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.execute(
-                "INSERT INTO papers (paper_uid, parse_status, summary_status, qa_status, graph_status, citation_status, enrich_status, created_at, updated_at) "
-                "VALUES ('p-1', 'done', 'done', 'done', 'done', 'done', 'pending', ?, ?)",
-                (now, now),
-            )
-            paper_id = cursor.lastrowid
-            conn.commit()
-
-        mark_downstream_stale(db_path, paper_id)
-
-        with sqlite3.connect(db_path) as conn:
-            row = conn.execute(
-                "SELECT parse_status, summary_status, qa_status, graph_status, citation_status FROM papers WHERE id = ?",
-                (paper_id,),
-            ).fetchone()
-
-        assert row == ("stale", "stale", "stale", "stale", "stale")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

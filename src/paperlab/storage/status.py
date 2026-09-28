@@ -6,10 +6,6 @@ from pathlib import Path
 from paperlab.utils.hashing import sha256_file
 
 
-def compute_parse_input_hash(file_sha256: str) -> str:
-    return hashlib.sha256(f"parse:{file_sha256}".encode()).hexdigest()[:16]
-
-
 def compute_summary_input_hash(
     parsed_json_path: Path,
     system_prompt: Path | str,
@@ -68,29 +64,6 @@ def compute_citations_input_hash(
         str(max_results),
     ]
     return hashlib.sha256(":".join(parts).encode()).hexdigest()[:16]
-
-
-def mark_downstream_stale(db_path: Path | str, paper_id: int) -> None:
-    import sqlite3
-    from datetime import datetime, timezone
-
-    db = Path(db_path).expanduser().resolve()
-    now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db) as conn:
-        conn.execute(
-            """
-            UPDATE papers
-            SET parse_status = 'stale',
-                summary_status = 'stale',
-                qa_status = 'stale',
-                graph_status = 'stale',
-                citation_status = 'stale',
-                updated_at = ?
-            WHERE id = ?
-            """,
-            (now, paper_id),
-        )
-        conn.commit()
 
 
 def _hash_value(value: Path | str) -> str:
