@@ -16,7 +16,6 @@ log = logging.getLogger(__name__)
 class ParseResult:
     completed: list[int] = field(default_factory=list)
     failed: list[int] = field(default_factory=list)
-    errors: dict[int, str] = field(default_factory=dict)
 
 
 def parse_path(
@@ -46,7 +45,6 @@ def parse_path(
 
     completed: list[int] = []
     failed: list[int] = []
-    errors: dict[int, str] = {}
 
     for paper_id in target_ids:
         try:
@@ -60,7 +58,6 @@ def parse_path(
         except Exception as exc:
             _mark_parse_failed(db_path, paper_id)
             failed.append(paper_id)
-            errors[paper_id] = str(exc)
             log.warning("Failed to parse paper %d: %s", paper_id, exc)
             if fail_fast:
                 raise
@@ -68,7 +65,7 @@ def parse_path(
     if not target_ids:
         log.info("No papers to parse.")
 
-    return ParseResult(completed=completed, failed=failed, errors=errors)
+    return ParseResult(completed=completed, failed=failed)
 
 
 def select_papers_for_parse(db_path: Path | str) -> list[int]:
