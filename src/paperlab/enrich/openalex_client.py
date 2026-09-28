@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import requests
-
 from paperlab.enrich.http import get_json
 
 _BASE = "https://api.openalex.org"
