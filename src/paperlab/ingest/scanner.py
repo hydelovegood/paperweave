@@ -31,17 +31,27 @@ def discover_pdf_paths(target: Path | str, recursive: bool = False) -> list[Path
     return sorted(path.resolve() for path in iterator if path.is_file())
 
 
-def scan_target(target: Path | str, recursive: bool = False) -> list[ScannedFile]:
+def scan_target(
+    target: Path | str,
+    recursive: bool = False,
+    known: dict[str, tuple[int, str, str]] | None = None,
+) -> list[ScannedFile]:
     scanned: list[ScannedFile] = []
 
     for pdf_path in discover_pdf_paths(target, recursive=recursive):
         stat_result = pdf_path.stat()
         mtime_utc = datetime.fromtimestamp(stat_result.st_mtime, timezone.utc).isoformat()
+        # Skip re-hashing when the stored record has the same size and mtime.
+        stored = known.get(str(pdf_path)) if known else None
+        if stored is not None and stored[0] == stat_result.st_size and stored[1] == mtime_utc:
+            sha256 = stored[2]
+        else:
+            sha256 = sha256_file(pdf_path)
         scanned.append(
             ScannedFile(
                 path=pdf_path,
                 filename=pdf_path.name,
-                sha256=sha256_file(pdf_path),
+                sha256=sha256,
                 size_bytes=stat_result.st_size,
                 mtime_utc=mtime_utc,
             )

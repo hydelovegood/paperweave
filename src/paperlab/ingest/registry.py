@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-import sqlite3
 from uuid import uuid4
 
 from paperlab.ingest.scanner import ScannedFile
+from paperlab.storage.db import db_connection
+
+
+def load_file_stat_index(db_path: Path | str) -> dict[str, tuple[int, str, str]]:
+    database_path = Path(db_path).expanduser().resolve()
+    with db_connection(database_path) as conn:
+        rows = conn.execute(
+            "SELECT path, size_bytes, mtime_utc, sha256 FROM files"
+        ).fetchall()
+    return {row[0]: (row[1], row[2], row[3]) for row in rows}
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,9 +34,7 @@ def register_scanned_files(db_path: Path | str, scanned_files: list[ScannedFile]
     updated = 0
     now = datetime.now(timezone.utc).isoformat()
 
-    with sqlite3.connect(database_path) as conn:
-        conn.execute("PRAGMA foreign_keys = ON")
-
+    with db_connection(database_path) as conn:
         for scanned in scanned_files:
             existing_by_path = conn.execute(
                 "SELECT id, sha256 FROM files WHERE path = ?",

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import logging
 from pathlib import Path
-import sqlite3
 
 from paperlab.config import load_settings
 from paperlab.parsing.pipeline import parse_and_persist
+from paperlab.storage.db import db_connection
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def parse_path(
 
 def select_papers_for_parse(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
-    with sqlite3.connect(db) as conn:
+    with db_connection(db) as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT p.id
@@ -84,7 +84,7 @@ def select_papers_for_parse(db_path: Path | str) -> list[int]:
 
 
 def _select_all_with_files(db_path: Path) -> list[int]:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         rows = conn.execute(
             """
             SELECT DISTINCT p.id
@@ -97,7 +97,7 @@ def _select_all_with_files(db_path: Path) -> list[int]:
 
 
 def _primary_file_path(db_path: Path, paper_id: int) -> Path | None:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             """
             SELECT f.path
@@ -114,7 +114,7 @@ def _primary_file_path(db_path: Path, paper_id: int) -> Path | None:
 
 def _mark_parse_stale(db_path: Path, paper_ids: list[int]) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         for paper_id in paper_ids:
             conn.execute(
                 "UPDATE papers SET parse_status = 'stale', updated_at = ? WHERE id = ?",
@@ -125,7 +125,7 @@ def _mark_parse_stale(db_path: Path, paper_ids: list[int]) -> None:
 
 def _mark_parse_done(db_path: Path, paper_id: int) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         conn.execute(
             "UPDATE papers SET parse_status = 'done', updated_at = ? WHERE id = ?",
             (now, paper_id),
@@ -135,7 +135,7 @@ def _mark_parse_done(db_path: Path, paper_id: int) -> None:
 
 def _mark_parse_failed(db_path: Path, paper_id: int) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         conn.execute(
             "UPDATE papers SET parse_status = 'failed', updated_at = ? WHERE id = ?",
             (now, paper_id),

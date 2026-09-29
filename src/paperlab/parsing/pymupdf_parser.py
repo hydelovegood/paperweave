@@ -6,7 +6,6 @@ from uuid import uuid4
 
 from paperlab.parsing.canonical import CanonicalPaper, CanonicalSection
 
-
 SECTION_RE = re.compile(
     r"^(\d*\.?\d*\s+"
     r"(?:Abstract|Introduction|Background|Method|Related\s+Work|Conclusion|"

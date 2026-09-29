@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import sqlite3
 import shutil
+import sqlite3
 from pathlib import Path
 from uuid import uuid4
 
@@ -71,8 +71,8 @@ def test_ingest_directory_only_registers_pdfs_under_target_path() -> None:
     (outside_dir / "paper_b.pdf").write_bytes(b"pdf-b")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         result = ingest_path(project_root, target_dir, recursive=False)
@@ -95,8 +95,8 @@ def test_identical_files_are_skipped_by_sha256() -> None:
     (target_dir / "paper_b.pdf").write_bytes(b"same-content")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         result = ingest_path(project_root, target_dir, recursive=False)
@@ -121,8 +121,8 @@ def test_changed_file_content_marks_parse_as_stale() -> None:
     paper_path.write_bytes(b"v1")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         first_result = ingest_path(project_root, paper_path, recursive=False)
@@ -151,8 +151,8 @@ def test_ingest_works_when_prompt_files_are_missing() -> None:
     paper_path.write_bytes(b"pdf")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         assert db_path.exists()
@@ -176,8 +176,8 @@ def test_changed_file_to_existing_sha_is_deduplicated_without_integrity_error() 
     file_b.write_bytes(b"same-b")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         first = ingest_path(project_root, target_dir, recursive=False)

@@ -5,7 +5,17 @@ import sys
 
 import click
 
-from paperlab.cli import citations_cmd, doctor_cmd, export_cmd, init_cmd, ingest_cmd, parse_cmd, qa_cmd, run_cmd, summarize_cmd
+from paperlab.cli import (
+    citations_cmd,
+    doctor_cmd,
+    export_cmd,
+    ingest_cmd,
+    init_cmd,
+    parse_cmd,
+    qa_cmd,
+    run_cmd,
+    summarize_cmd,
+)
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +83,8 @@ def parse(project_root, paper_ids, changed, all_, force, fail_fast):
 @click.option("--all", "all_", is_flag=True, help="Process all registered papers")
 @click.option("--force", is_flag=True, help="Force rerun changed stages")
 @click.option("--fail-fast", is_flag=True, help="Stop on first failed paper")
-def run(project_root, target, recursive, all_, force, fail_fast):
+@click.option("--concurrency", type=int, default=1, show_default=True, help="Parallel LLM calls for summary/QA")
+def run(project_root, target, recursive, all_, force, fail_fast, concurrency):
     """Run ingest, parse, summary, QA, and exports"""
     result = run_cmd.run_path(
         project_root,
@@ -82,6 +93,7 @@ def run(project_root, target, recursive, all_, force, fail_fast):
         all_=all_,
         force=force,
         fail_fast=fail_fast,
+        concurrency=concurrency,
     )
     log.info("Run complete")
     log.info("- discovered: %s", result.ingest.discovered)
@@ -101,7 +113,8 @@ def run(project_root, target, recursive, all_, force, fail_fast):
 @click.option("--changed", is_flag=True, help="Only changed or stale papers")
 @click.option("--all", "all_", is_flag=True, help="All parsed papers")
 @click.option("--force", is_flag=True, help="Force rerun for specified paper IDs")
-def summarize(project_root, paper_ids, changed, all_, force):
+@click.option("--concurrency", type=int, default=1, show_default=True, help="Parallel LLM calls")
+def summarize(project_root, paper_ids, changed, all_, force, concurrency):
     """Generate structured summaries"""
     ids = list(paper_ids) if paper_ids else None
     completed = summarize_cmd.summarize_path(
@@ -110,6 +123,7 @@ def summarize(project_root, paper_ids, changed, all_, force):
         changed=changed or not all_,
         all_=all_,
         force=force,
+        concurrency=concurrency,
     )
     log.info("Summary complete: %d paper(s) processed", len(completed))
 
@@ -120,7 +134,8 @@ def summarize(project_root, paper_ids, changed, all_, force):
 @click.option("--changed", is_flag=True, help="Only changed or stale papers")
 @click.option("--all", "all_", is_flag=True, help="All parsed papers")
 @click.option("--force", is_flag=True, help="Force rerun for specified paper IDs")
-def qa(project_root, paper_ids, changed, all_, force):
+@click.option("--concurrency", type=int, default=1, show_default=True, help="Parallel LLM calls")
+def qa(project_root, paper_ids, changed, all_, force, concurrency):
     """Generate deep Q&A"""
     ids = list(paper_ids) if paper_ids else None
     completed = qa_cmd.qa_path(
@@ -129,6 +144,7 @@ def qa(project_root, paper_ids, changed, all_, force):
         changed=changed or not all_,
         all_=all_,
         force=force,
+        concurrency=concurrency,
     )
     log.info("QA complete: %d paper(s) processed", len(completed))
 

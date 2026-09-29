@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from paperlab.parsing.pdf_utils import extract_doi, read_pdf_head_text
+from paperlab.storage.db import db_connection
 
 
 def pre_enrich_biomed_metadata(
@@ -40,7 +40,7 @@ def pre_enrich_biomed_metadata(
         return
 
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as connection:
+    with db_connection(db_path) as connection:
         connection.execute(
             """
             UPDATE papers
@@ -70,7 +70,7 @@ def pre_enrich_biomed_metadata(
 
 
 def _get_biomed_metadata(db_path: Path, paper_id: int) -> dict:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT pmid, pmcid, journal, mesh_terms, publication_type, doi, canonical_title FROM papers WHERE id = ?",
             (paper_id,),

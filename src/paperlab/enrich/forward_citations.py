@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +13,7 @@ from paperlab.enrich import openalex_client as openalex
 from paperlab.enrich import pubmed_client as pubmed
 from paperlab.enrich import semanticscholar_client as s2
 from paperlab.enrich import unpaywall_client as unpaywall
+from paperlab.storage.db import db_connection
 from paperlab.storage.status import compute_citations_input_hash
 from paperlab.storage.task_runs import record_task_run
 
@@ -72,7 +72,7 @@ def track_forward_citations(
 
         # Update statuses
         ended_at = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute(
                 "UPDATE papers SET enrich_status = 'done', citation_status = 'done', updated_at = ? WHERE id = ?",
                 (ended_at, paper_id),
@@ -86,7 +86,7 @@ def track_forward_citations(
         return citing_ids
     except Exception:
         ended_at = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(db_path) as conn:
+        with db_connection(db_path) as conn:
             conn.execute(
                 "UPDATE papers SET citation_status = 'failed', updated_at = ? WHERE id = ?",
                 (ended_at, paper_id),
@@ -101,7 +101,7 @@ def track_forward_citations(
 
 def select_papers_for_citations(db_path: Path | str) -> list[int]:
     db = Path(db_path).expanduser().resolve()
-    with sqlite3.connect(db) as conn:
+    with db_connection(db) as conn:
         rows = conn.execute(
             "SELECT id FROM papers WHERE citation_status IN ('pending', 'stale', 'failed') AND parse_status = 'done' ORDER BY id"
         ).fetchall()
@@ -109,7 +109,7 @@ def select_papers_for_citations(db_path: Path | str) -> list[int]:
 
 
 def _get_paper(db_path: Path, paper_id: int) -> dict:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT canonical_title, doi, arxiv_id, openalex_id, s2_paper_id, pmid, pmcid FROM papers WHERE id = ?",
             (paper_id,),
@@ -260,7 +260,7 @@ def _update_paper_ids(db_path: Path, paper_id: int, resolved: dict) -> None:
 
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [now, paper_id]
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         conn.execute(
             f"UPDATE papers SET {set_clause}, updated_at = ? WHERE id = ?",
             values,
@@ -277,7 +277,7 @@ def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
     title = citing.get("title") or ""
     year = citing.get("year")
 
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         if doi:
             existing = conn.execute(
                 "SELECT id FROM papers WHERE doi = ?", (doi,)
@@ -344,7 +344,7 @@ def _upsert_paper_stub(db_path: Path, citing: dict) -> int:
 
 def _create_citation_edge(db_path: Path, citing_id: int, cited_id: int, source: str) -> None:
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         conn.execute(
             """
             INSERT OR IGNORE INTO citation_edges (citing_paper_id, cited_paper_id, edge_source, edge_type, confidence, created_at)
@@ -371,7 +371,7 @@ def _create_external_link(db_path: Path, paper_id: int, citing: dict, settings) 
         return
 
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         conn.execute(
             """
             INSERT OR IGNORE INTO external_links (paper_id, link_type, url, source, is_open_access, is_downloaded, checked_at)

@@ -50,8 +50,8 @@ def test_doctor_reports_core_checks(monkeypatch):
     _write_project_files(project_root)
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.doctor_cmd import run_doctor
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         assert db_path.exists()
@@ -69,8 +69,9 @@ def test_doctor_reports_core_checks(monkeypatch):
 
 
 def test_dependency_status_only_treats_import_error_as_missing(monkeypatch):
-    from paperlab.cli.doctor_cmd import _dependency_status
     import builtins
+
+    from paperlab.cli.doctor_cmd import _dependency_status
 
     real_import = builtins.__import__
 

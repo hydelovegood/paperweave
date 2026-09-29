@@ -193,8 +193,8 @@ def test_v1_full_flow(monkeypatch):
             assert links[0] == 1
 
         # --- Step 7: Export ---
-        from paperlab.export.summary_export import export_summary
         from paperlab.export.qa_export import export_qa
+        from paperlab.export.summary_export import export_summary
 
         summary_path = project_root / "data" / "exports" / "summary.md"
         qa_path = project_root / "data" / "exports" / "QA.md"

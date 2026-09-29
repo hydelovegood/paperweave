@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
+
+from paperlab.storage.db import db_connection
 
 
 def export_summary(db_path: Path | str, output_path: Path | str) -> int:
@@ -9,7 +10,7 @@ def export_summary(db_path: Path | str, output_path: Path | str) -> int:
     out = Path(output_path).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    with sqlite3.connect(db) as conn:
+    with db_connection(db) as conn:
         rows = conn.execute(
             """
             SELECT p.id, p.canonical_title, s.summary_md

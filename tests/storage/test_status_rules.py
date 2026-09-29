@@ -166,8 +166,8 @@ def test_file_change_cascades_all_statuses_to_stale():
     paper_path.write_bytes(b"v1")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         ingest_path(project_root, paper_path)

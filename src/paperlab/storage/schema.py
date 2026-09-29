@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sqlite3
 
-
 SCHEMA_STATEMENTS = (
     """
     CREATE TABLE IF NOT EXISTS files (
@@ -144,9 +143,26 @@ SCHEMA_STATEMENTS = (
 )
 
 
+INDEX_STATEMENTS = (
+    "CREATE INDEX IF NOT EXISTS idx_files_sha256 ON files (sha256)",
+    "CREATE INDEX IF NOT EXISTS idx_files_status ON files (status)",
+    "CREATE INDEX IF NOT EXISTS idx_paper_files_file_id ON paper_files (file_id)",
+    "CREATE INDEX IF NOT EXISTS idx_sections_paper_id ON sections (paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_summaries_paper_id ON summaries (paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_qa_items_paper_id ON qa_items (paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_citation_edges_citing ON citation_edges (citing_paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_citation_edges_cited ON citation_edges (cited_paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_external_links_paper_id ON external_links (paper_id)",
+    "CREATE INDEX IF NOT EXISTS idx_task_runs_target ON task_runs (target_type, target_id)",
+    "CREATE INDEX IF NOT EXISTS idx_task_runs_lookup ON task_runs (task_name, target_id, input_hash, status)",
+)
+
+
 def create_all_tables(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA foreign_keys = ON")
     for statement in SCHEMA_STATEMENTS:
+        connection.execute(statement)
+    for statement in INDEX_STATEMENTS:
         connection.execute(statement)
     _ensure_papers_columns(connection)
     connection.commit()

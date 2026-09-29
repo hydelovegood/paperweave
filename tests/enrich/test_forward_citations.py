@@ -111,7 +111,6 @@ def test_select_papers_for_citations_returns_eligible():
         _insert_classic_paper(db_path, "Eligible")
         _insert_classic_paper(db_path, "Already done")
 
-        now = "2026-04-10T00:00:00+00:00"
         with sqlite3.connect(db_path) as conn:
             conn.execute("UPDATE papers SET citation_status = 'done' WHERE canonical_title = 'Already done'")
             conn.commit()
@@ -342,7 +341,7 @@ def test_track_citations_stores_non_oa_links_when_configured(monkeypatch):
             lambda doi, email: None,
         )
 
-        citing_ids = track_forward_citations(project_root, paper_id)
+        track_forward_citations(project_root, paper_id)
 
         with sqlite3.connect(db_path) as conn:
             links = conn.execute(
@@ -460,8 +459,8 @@ def test_track_forward_citations_records_failed_task_run(monkeypatch):
     _write_project_files(project_root)
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.citations_cmd import citations_forward_cmd
+        from paperlab.cli.init_cmd import init_project
         db_path = init_project(project_root)
 
         paper_id = _insert_classic_paper(db_path, doi="10.1234/classic")

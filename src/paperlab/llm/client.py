@@ -6,6 +6,8 @@ import re
 
 _client_cache: dict[str, object] = {}
 
+REQUEST_TIMEOUT_SECONDS = 300
+
 
 def _get_client(api_key: str, base_url: str, max_retries: int = 2):
     from openai import OpenAI
@@ -14,7 +16,12 @@ def _get_client(api_key: str, base_url: str, max_retries: int = 2):
     cache_key = f"{key_fingerprint}:{base_url}:{max_retries}"
     client = _client_cache.get(cache_key)
     if client is None:
-        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries)
+        client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            max_retries=max_retries,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
         _client_cache[cache_key] = client
     return client
 

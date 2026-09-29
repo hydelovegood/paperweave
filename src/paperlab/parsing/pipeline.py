@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
-import sqlite3
 from dataclasses import replace
 from datetime import datetime, timezone
+from pathlib import Path
 
 from paperlab.config import load_settings
 from paperlab.enrich.biomed_pre_enrich import pre_enrich_biomed_metadata
@@ -15,19 +14,19 @@ from paperlab.parsing.deepxiv_parser import (
     parse_arxiv_paper,
     search_arxiv_paper,
 )
-from paperlab.parsing.pdf_utils import extract_arxiv_id, extract_doi, read_pdf_text, read_pdf_head_text
+from paperlab.parsing.pdf_utils import extract_arxiv_id, read_pdf_head_text, read_pdf_text
 from paperlab.parsing.pymupdf_parser import parse_pdf
+from paperlab.storage.db import db_connection
 
 
 def _get_pmcid(db_path: Path, paper_id: int) -> str | None:
-    import sqlite3
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute("SELECT pmcid FROM papers WHERE id = ?", (paper_id,)).fetchone()
     return row[0] if row and row[0] else None
 
 
 def _get_biomed_metadata(db_path: Path, paper_id: int) -> dict:
-    with sqlite3.connect(db_path) as conn:
+    with db_connection(db_path) as conn:
         row = conn.execute(
             "SELECT pmid, pmcid, journal, mesh_terms, publication_type, doi, canonical_title FROM papers WHERE id = ?",
             (paper_id,),
@@ -159,7 +158,7 @@ def parse_and_persist(
     )
 
     now = datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(db_path) as connection:
+    with db_connection(db_path) as connection:
         connection.execute("DELETE FROM sections WHERE paper_id = ?", (paper_id,))
         for section in canonical.sections:
             connection.execute(

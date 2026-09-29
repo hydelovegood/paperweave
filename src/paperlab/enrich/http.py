@@ -5,6 +5,15 @@ from typing import Any
 
 import requests
 
+_session: requests.Session | None = None
+
+
+def _get_session() -> requests.Session:
+    global _session
+    if _session is None:
+        _session = requests.Session()
+    return _session
+
 
 def get_json(
     url: str,
@@ -17,7 +26,7 @@ def get_json(
 ) -> requests.Response:
     last_response: requests.Response | None = None
     for attempt in range(retries):
-        response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        response = _get_session().get(url, params=params, headers=headers, timeout=timeout)
         last_response = response
         if response.status_code in {429, 500, 502, 503, 504} and attempt < retries - 1:
             time.sleep(backoff_base * (2**attempt))

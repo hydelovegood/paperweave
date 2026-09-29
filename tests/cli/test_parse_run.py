@@ -129,8 +129,8 @@ def test_parse_path_processes_changed_papers_and_skips_done(monkeypatch) -> None
     done_pdf.write_bytes(b"done")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         ingest_path(project_root, imports)
@@ -170,8 +170,8 @@ def test_parse_path_fail_fast_stops_after_first_failure(monkeypatch) -> None:
     (imports / "b.pdf").write_bytes(b"b")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         init_project(project_root)
         ingest_path(project_root, imports)
@@ -256,8 +256,8 @@ def test_run_path_force_reprocesses_done_papers(monkeypatch) -> None:
     paper_path.write_bytes(b"pdf")
 
     try:
-        from paperlab.cli.init_cmd import init_project
         from paperlab.cli.ingest_cmd import ingest_path
+        from paperlab.cli.init_cmd import init_project
 
         db_path = init_project(project_root)
         ingest_path(project_root, paper_path)
