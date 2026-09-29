@@ -4,22 +4,21 @@
 
 # PaperWeave（溯源文库）
 
-> Local-first CLI for turning PDF papers into a structured research library with parsing, summaries, Q&A, citation tracking, and Markdown exports.
+一个我自己在用的论文管理工具。把一堆 PDF 丢给它，它会解析出章节结构、生成结构化摘要和 QA、追踪引用关系，最后导出成能直接读的 Markdown。所有东西都存在本地，SQLite 是唯一的事实来源，导出的 md 只是给人看的。
 
-PaperWeave 是一个面向研究者的本地论文工作流工具。它把一批 PDF 论文整理成可持续更新的研究资产：正文结构、结构化摘要、深度问答、引用关系和可阅读的 Markdown 导出。
+为什么不用 Zotero + 插件：我想要的是"整个文库可以反复跑、增量更新、还能读"的东西——新增论文只重跑变化的部分，prompt 或模型换了也只重跑该重跑的，之前的摘要和 QA 都在数据库里留着。现成的工具凑起来总差一点，就自己写了。
 
-## 核心能力
+目前能做的事：
 
-- 导入单个 PDF 或整个文件夹，支持递归扫描和 SHA256 去重。
-- 解析论文正文与章节结构，arXiv 论文优先使用 DeepXiv，其他 PDF 使用 PyMuPDF。
-- 生成结构化 Summary 和 reviewer / interview / author-defense 风格 QA。
-- 追踪经典论文的 forward citations，并保存 OA 链接、DOI 页面和引用边。
-- 使用 SQLite 作为唯一事实来源，Markdown 只是导出层。
-- 支持增量运行：文件、prompt、模型或任务输入变化后只重跑需要更新的部分。
+- 导入单个 PDF 或整个文件夹（支持递归），SHA256 去重
+- 解析章节结构，arXiv 论文走 DeepXiv，其他走 PyMuPDF
+- 生成结构化摘要，以及 reviewer / interview / author-defense 几种风格的 QA
+- 追踪经典论文的 forward citations，顺便存下 OA 链接和 DOI 页面
+- 增量重跑：文件、prompt、模型变了只更新受影响的部分
 
 ## 快速开始
 
-### 1. 安装
+### 安装
 
 ```bash
 conda create -n paperweave python=3.10
@@ -29,25 +28,11 @@ cd paperweave
 pip install -e .
 ```
 
-也可以使用 venv：
+用 venv 也行。装完后命令是 `paperweave`，旧的 `paperctl` 别名也还在。
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -e .
-```
+### 配密钥
 
-安装后可用命令：
-
-```bash
-paperweave --help
-```
-
-兼容别名 `paperctl` 仍然可用。
-
-### 2. 配置密钥
-
-复制 `.env.example` 为 `.env`，按需填写：
+复制 `.env.example` 成 `.env`，按需要填：
 
 ```env
 DEEPXIV_TOKEN=
@@ -57,90 +42,53 @@ UNPAYWALL_EMAIL=
 NCBI_API_KEY=
 ```
 
-默认配置在 `configs/app.yaml`。通常只需要确认 LLM 服务地址、模型名、研究背景和导出路径。
+默认配置在 `configs/app.yaml`，一般只要确认 LLM 地址、模型名、`research_context`（你自己的研究背景，会写进摘要 prompt）和导出路径。
 
-### 3. 一条命令跑完整流程
-
-准备一个论文文件夹，例如 `C:\papers\my-study`，然后运行：
+### 一条命令跑完
 
 ```bash
 paperweave init C:\research\paperweave
 paperweave run C:\research\paperweave C:\papers\my-study --recursive
 ```
 
-默认 `run` 会执行：
-
-```text
-ingest -> parse -> summarize -> qa -> export summary -> export qa
-```
-
-完成后查看：
+`run` 默认执行 `ingest -> parse -> summarize -> qa -> export`。产物在：
 
 - `data/exports/summary.md`
 - `data/exports/QA.md`
 
-调试时可在第一处失败停止：
-
-```bash
-paperweave run C:\research\paperweave C:\papers --recursive --fail-fast
-```
+想在第一个报错处停下来就加 `--fail-fast`；论文多的话可以加 `--concurrency 4` 让 summarize/qa 阶段并发调 LLM。
 
 ## 常用命令
 
-初始化项目：
-
 ```bash
+# 初始化 / 导入
 paperweave init C:\research\paperweave
-```
-
-导入 PDF：
-
-```bash
 paperweave ingest C:\research\paperweave C:\papers --recursive
-```
 
-解析论文：
-
-```bash
+# 解析（一般 --changed 就够了）
 paperweave parse C:\research\paperweave --changed
 paperweave parse C:\research\paperweave --all
-```
 
-生成摘要和 QA：
-
-```bash
+# 摘要和 QA
 paperweave summarize C:\research\paperweave --changed
 paperweave qa C:\research\paperweave --changed
-```
 
-强制重跑指定论文：
-
-```bash
+# 换了 prompt 想强制重跑某几篇
 paperweave summarize C:\research\paperweave --paper-ids 1 2 3 --force
-paperweave qa C:\research\paperweave --paper-ids 1 2 3 --force
-```
 
-追踪 forward citations：
-
-```bash
+# 追踪 forward citations
 paperweave citations forward C:\research\paperweave --paper-ids 9 --year-start 2024 --year-end 2026 --max-results 20
-```
 
-导出结果：
-
-```bash
+# 手动导出（run 里其实会自动跑）
 paperweave export summary C:\research\paperweave
 paperweave export qa C:\research\paperweave
-```
 
-检查环境：
-
-```bash
+# 环境自检，--check-llm 会真的发一次最小请求
 paperweave doctor C:\research\paperweave
 paperweave doctor C:\research\paperweave --check-llm
 ```
 
-## 工作流与数据模型
+## 数据流
 
 ```text
 PDF folder
@@ -161,42 +109,30 @@ SQLite + parsed JSON + raw logs
 summary.md / QA.md
 ```
 
-主要状态字段：
-
-- `parse_status`
-- `summary_status`
-- `qa_status`
-- `citation_status`
-
-常见状态值：
-
-- `pending`
-- `done`
-- `failed`
-- `stale`
+每篇论文有 `parse_status`、`summary_status`、`qa_status`、`citation_status` 几个状态字段，取值 `pending` / `done` / `failed` / `stale`。文件一变，整条链下游都会标成 `stale`。
 
 ## 项目结构
 
 ```text
 paperlab/
-├─ configs/              # app.yaml and prompt templates
-├─ data/                 # parsed JSON, cache, exports, logs
-├─ db/                   # SQLite database
+├─ configs/              # app.yaml 和 prompt 模板
+├─ data/                 # 解析后的 JSON、缓存、导出、日志
+├─ db/                   # SQLite
 ├─ src/paperlab/
-│  ├─ cli/               # CLI commands
-│  ├─ config/            # settings loader
-│  ├─ ingest/            # PDF discovery and registration
-│  ├─ parsing/           # DeepXiv / PyMuPDF parsing pipeline
-│  ├─ enrich/            # citation and metadata clients
-│  ├─ llm/               # summary and QA generation
-│  ├─ export/            # Markdown exports
-│  └─ storage/           # schema and task state
+│  ├─ cli/               # 命令行
+│  ├─ config/            # 配置加载
+│  ├─ ingest/            # PDF 发现与注册
+│  ├─ parsing/           # DeepXiv / PyMuPDF 解析
+│  ├─ enrich/            # 引用和元数据 API 客户端
+│  ├─ llm/               # 摘要和 QA 生成
+│  ├─ export/            # Markdown 导出
+│  └─ storage/           # 表结构和任务状态
 └─ tests/
 ```
 
-## 配置说明
+## 配置
 
-`configs/app.yaml` 的核心字段：
+`configs/app.yaml` 大概长这样：
 
 ```yaml
 database:
@@ -223,36 +159,32 @@ citations:
   download_oa_only: true
 ```
 
-`download_oa_only: true` 不会丢弃非 OA 论文；PaperWeave 仍会保存 DOI 或 landing page 链接。这个选项主要控制是否主动查询开放获取 PDF。
+`download_oa_only: true` 不会丢掉非 OA 的论文——找不到开放全文时还是会存 DOI / landing page 链接，它只是控制要不要主动去查 OA PDF。
 
-## 当前边界
+## 已知的问题
 
-- 目前是 CLI-first、single-user、local-first 工具。
-- 没有 GUI 和后台 worker。
-- forward-citation PDF 下载还不是完整闭环。
-- 非 arXiv PDF 的解析质量取决于 PyMuPDF 可提取文本的质量。
-- LLM 输出已经有结构校验，但高价值论文仍建议人工抽查。
+- 非 arXiv 的 PDF 解析质量全看 PyMuPDF 能抠出多少干净文本，扫描件基本没救
+- forward-citation 的 PDF 下载还没完全打通
+- LLM 输出有结构校验，但重要论文还是建议自己扫一眼
+- 单人本地工具，没有 GUI，没有后台 worker，也没打算做成多人协作
 
 ## 安全提醒
 
-- `.env` 可能包含真实 API key，不要提交。
-- `data/logs/llm/` 会保存原始 LLM 输出。
-- `db/papers.db` 会保存论文元数据、摘要、QA 和引用信息。
-- 在共享机器上使用时，请保护项目目录权限。
+- `.env` 里有真的 API key，别提交
+- `data/logs/llm/` 存的是 LLM 原始输出
+- `db/papers.db` 里是论文元数据、摘要、QA 和引用关系
+- 共享机器上跑的话注意项目目录权限
 
-## Roadmap
+## 想做的事
 
-- 自动下载并接入 OA citing PDFs。
-- 更强的 DOI / arXiv / OpenAlex / Semantic Scholar 对齐。
-- 主题、方法、数据集标签。
-- lineage / research-thread 报告。
-- 更严格的 schema-constrained LLM 输出。
-- 更丰富的 `doctor` 诊断。
+- OA citing PDF 自动下载
+- DOI / arXiv / OpenAlex / Semantic Scholar 之间更靠谱的 id 对齐
+- 主题、方法、数据集标签
+- lineage / research-thread 报告
+- LLM 输出的 schema 约束再收紧一点
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-## Acknowledgements
-
-PaperWeave builds on or integrates with DeepXiv, PyMuPDF, OpenAlex, Semantic Scholar, Crossref, Unpaywall, PubMed/PMC, and OpenAI-compatible API clients.
+用了 DeepXiv、PyMuPDF、OpenAlex、Semantic Scholar、Crossref、Unpaywall、PubMed/PMC 和 OpenAI 兼容 API。
